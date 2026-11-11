@@ -102,9 +102,9 @@ def fleet_errors(doc, text, role, template=False):
                 f"{p.get('externalPort')} (identity rule)")
     if role in ("leader", "commander"):
         ue = doc.get("userenv", {}).get("shared", {})
-        for k in ("SKILLS_PAT", "TAILSCALE_AUTH_KEY"):
+        for k in ("TAILSCALE_AUTH_KEY",):
             if k not in ue:
-                errs.append(f"[userenv.shared] missing {k} (two-vars rule)")
+                errs.append(f"[userenv.shared] missing {k} (fleet-vars rule)")
             elif not ue[k] and not template:
                 errs.append(f"[userenv.shared] {k} is empty on a configured box")
     heads = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("[")]
