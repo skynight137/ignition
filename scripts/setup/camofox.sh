@@ -252,6 +252,15 @@ camofox_write_env_snippet() {
     echo "export CAMOFOX_COOKIES_DIR=\"$CAMOFOX_COOKIES_DIR\""
     echo "export CAMOFOX_UPLOADS_DIR=\"$CAMOFOX_UPLOADS_DIR\""
     echo "export CAMOFOX_TRACES_DIR=\"$CAMOFOX_TRACES_DIR\""
+    # Crash reporter redirect: the server's sendToRelay() POSTs to this
+    # URL. A Replit box cannot dial the tailnet directly, so the URL
+    # points at the loopback crash-shim (crash-shim-loop.sh keeps it
+    # alive), which forwards each report to the CC on muse-hop over
+    # `tailscale nc`. The shim stamps the node name itself, so this
+    # value is the same on every box. Never set
+    # CAMOFOX_CRASH_REPORT_ENABLED=false here: that kills the watchdog
+    # (stall/hang/leak detection) along with the relay.
+    echo "export CAMOFOX_CRASH_REPORT_URL=\"http://127.0.0.1:18099/crash-report\""
     echo 'if [[ "${CAMOFOX_BIND_HOST:-127.0.0.1}" = 127.0.0.1 && "${PORT:-9377}" = "9377" ]]; then unset CAMOFOX_ACCESS_KEY; fi'
   } > "$f"
   ok "camofox env snippet: $f"
