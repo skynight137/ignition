@@ -45,14 +45,22 @@ Verdicts per stop (BOTH engines): SHELL / LOGGED-OUT-WALL (visible text
 contains both "Log in" and "Sign up", confirmed by a second probe 5s
 later — the camofox --fail-text discipline) / CF-STALL (poll budget spent
 on the "Just a moment..." title; Cloudflare normally clears by itself in
-~7-18s) / ERROR (transport/server failure) / UNKNOWN, with time-to-shell
-per stop and title tracking. After a SHELL verdict the tab is held for
-the full dwell and re-probed: still-shell is logged. Circuit breaker:
-TOUR_MAX_EARLY_FAILURES CONSECUTIVE non-SHELL stops abort the tour
-(`*** tour ABORTED`, exit 1); a SHELL stop resets the count. ALL page
-reads in the poll loop are bounded — asyncio.wait_for on the Lightpanda
-side, an explicit request timeout on every camofox call — because a
-stuck challenge page once wedged an unbounded read for ~100s.
+~7-18s) / NOT-FOUND (the page title is a 404 — a 404 page carries the
+"Personal workspace" marker too, so it must FAIL, never score SHELL;
+fleet finding 2026-11-11, proven live 2026-11-12 on the deleted
+repl-101..109) / ERROR (transport/server failure) / TIMEOUT (the hard
+per-stop cap below) / UNKNOWN, with time-to-shell per stop and title
+tracking. After a SHELL verdict the tab is held for the full dwell and
+re-probed: still-shell is logged. Circuit breaker (redesign 2026-11-12):
+TOUR_MAX_EARLY_FAILURES CONSECUTIVE non-SHELL stops; a SHELL stop
+resets the count. The counter stays, the exit goes: the first trip in a
+round restarts the local camofox server (process-level, tour workflow
+untouched) and the tour CONTINUES; a fresh streak after that restart
+backs off (skip the rest of the round) and never exits. ALL page reads
+in the poll loop are bounded — asyncio.wait_for on the Lightpanda side,
+an explicit request timeout on every camofox call — because a stuck
+challenge page once wedged an unbounded read for ~100s; main() additionally
+caps every stop at STOP_TIMEOUT (POLL + DWELL + 300s by default).
 
 Lightpanda engine (proven shape, fleet trial 2026-11-06):
   * one fresh server per stop, torn down after the stop: Lightpanda has
@@ -312,6 +320,11 @@ class _Engine:
     def teardown(self):
         pass
 
+    def restart_server(self):
+        """Restart the engine's resident server after a breaker trip.
+        Base: no resident server to restart — the caller backs off."""
+        return False
+
 
 class _LightpandaEngine(_Engine):
     def env_file(self):
@@ -380,6 +393,16 @@ class _LightpandaEngine(_Engine):
                 CURRENT_SRV.kill()
             except Exception:
                 pass
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 class _CamofoxEngine(_Engine):
@@ -480,6 +503,87 @@ class _CamofoxEngine(_Engine):
         log(f"camofox: no jar at {JAR} — using the server's "
             f"persisted cookies for user {CF_USER}", "WARN")
         return f" cookies=persisted (user={CF_USER})"
+
+    def restart_server(self):
+        """Restart the local camofox server, process-level, and wait
+        for /health. The tour workflow is untouched; the launch-camofox
+        workflow is NOT: it holds itself open by waiting on the server
+        process, so killing the server ends that task — the detached
+        relaunch below replaces it until the next workspace boot, and
+        the log says so. No cookie re-import: the server's persisted
+        profile (sessions/partitions) survives a restart; the jar was
+        already imported at prepare(). Returns True when the server
+        answers /health again."""
+        import subprocess
+        launcher = shutil.which("launch-camofox-browser")
+        if not launcher:
+            home = os.environ.get("REPL_HOME") or os.path.expanduser("~")
+            cand = os.path.join(home, "workspace", ".local", "bin",
+                                "launch-camofox-browser")
+            launcher = cand if os.path.exists(cand) else None
+        if not launcher:
+            log("breaker: no launch-camofox-browser found — cannot "
+                "restart the server", "ERROR")
+            return False
+        # The server process is node running the camofox server
+        # (diagnose text: kill the 'node server.js' process). Bracket
+        # patterns so pgrep never matches its own command line. The
+        # wrapper pattern also matches the launcher script itself —
+        # acceptable: it was going to exit with its server anyway.
+        killed = []
+        for pat in ("[s]erver.js", "[c]amofox-browser"):
+            try:
+                out = subprocess.run(
+                    ["pgrep", "-f", pat], capture_output=True,
+                    text=True, timeout=10)
+            except Exception:
+                continue
+            for pid in out.stdout.split():
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                    killed.append(int(pid))
+                except (ProcessLookupError, ValueError, PermissionError):
+                    pass
+            if killed:
+                break
+        if not killed:
+            log("breaker: no camofox server process found to kill — "
+                "starting a fresh one", "WARN")
+        else:
+            deadline = time.time() + 10
+            while time.time() < deadline and any(
+                    _pid_alive(p) for p in killed):
+                time.sleep(0.5)
+            for p in killed:
+                if _pid_alive(p):
+                    try:
+                        os.kill(p, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+        log("breaker: server stopped; relaunching detached "
+            f"(launcher={launcher}) — the launch-camofox workflow "
+            "task will end with its server; this relaunch replaces "
+            "it until the next boot", "WARN")
+        try:
+            subprocess.Popen(
+                ["nohup", launcher],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, start_new_session=True,
+                close_fds=True)
+        except Exception as e:
+            log(f"breaker: relaunch failed: {e}", "ERROR")
+            return False
+        key = cf_key()
+        t0 = time.time()
+        while time.time() - t0 < CF_RESTART_WAIT_S:
+            if cf_health(key) is not None:
+                log(f"breaker: server back after "
+                    f"{time.time()-t0:.0f}s", "OK")
+                return True
+            time.sleep(3)
+        log(f"breaker: server did NOT answer /health within "
+            f"{CF_RESTART_WAIT_S}s after relaunch", "ERROR")
+        return False
 
     async def run_stop(self, idx, url):
         # The camofox stop is sync HTTP; run it in a thread so the
@@ -780,6 +884,14 @@ DWELL = cfg_int("TOUR_DWELL_S", 60)
 GAP = cfg_int("TOUR_GAP_S", 0)
 BREAKER = cfg_int("TOUR_MAX_EARLY_FAILURES", 3)
 POLL = cfg_int_chain(["TOUR_POLL_S", "LP_POLL_S"], 150)
+# Breaker consequence (redesign 2026-11-12): one server restart per
+# round at most; a second trip backs off for this long instead.
+BREAKER_BACKOFF_S = cfg_int("TOUR_BREAKER_BACKOFF_S", 60)
+CF_RESTART_WAIT_S = cfg_int("TOUR_CAMOFOX_RESTART_WAIT_S", 120)
+# Hard per-stop timeout: POLL (marker wait) + DWELL (hold) + the worst
+# single request timeout (cf_req default 300s). A stop that exceeds it
+# is a TIMEOUT failure, never a hang.
+STOP_TIMEOUT = cfg_int("TOUR_STOP_TIMEOUT_S", 0) or (POLL + DWELL + 300)
 BASE_PORT = cfg_int_chain(["TOUR_BASE_PORT", "LP_BASE_PORT"], 19401)
 MAX_ROUNDS = cfg_int_chain(["TOUR_MAX_ROUNDS", "LP_MAX_ROUNDS"], 0)
 WRITEBACK = cfg_chain(["TOUR_JAR_WRITEBACK", "LP_JAR_WRITEBACK"], "") \
@@ -1841,6 +1953,15 @@ def run_stop_camofox(idx, url):
             if isinstance(title, str) and title != last_title:
                 log(f"stop {name}: title -> {title!r}", "SKIP")
                 last_title = title
+            if isinstance(title, str) and "404" in title:
+                # A 404 page carries the 'Personal workspace' marker
+                # too (fleet finding 2026-11-11, proven live 2026-11-12
+                # on the deleted repl-101..109): a 404 must FAIL, never
+                # score SHELL. Fail fast, do not spend the poll budget.
+                verdict = "NOT-FOUND"
+                log(f"stop {name}: 404 page (title={title!r}) — "
+                    "failing, not SHELL", "WARN")
+                break
             text = cf_page_text(key, tab)
             if is_wall(text):
                 # confirm once, 5s later (the --fail-text discipline)
@@ -1883,6 +2004,14 @@ def run_stop_camofox(idx, url):
             still = any(m in text for m in markers) and not is_wall(text)
             log(f"stop {name}: post-hold still-shell={still} "
                 f"textlen={len(text)}", "OK" if still else "WARN")
+            title_after = cf_eval(key, tab, _TITLE_JS)
+            if isinstance(title_after, str) and "404" in title_after:
+                # The page navigated to a 404 during the dwell: the
+                # SHELL verdict from the poll loop no longer holds.
+                verdict = "NOT-FOUND"
+                log(f"stop {name}: 404 after dwell "
+                    f"(title={title_after!r}) — failing, not SHELL",
+                    "WARN")
     except Exception as e:
         verdict = "ERROR"
         log(f"stop {name}: ERROR {type(e).__name__} {str(e)[:200]}",
@@ -1968,9 +2097,18 @@ async def main():
         r0 = time.time()
         log(f"=== round {rnd} start ===")
         ENGINE.prepare_round(rnd)
+        restarts = 0  # server restarts taken this round (max 1)
+        round_broken = False
         for idx, url in enumerate(LINKS):
             name = url.rsplit("/", 1)[-1]
-            verdict, tts, rss_peak, popups = await run_stop(idx, url)
+            try:
+                verdict, tts, rss_peak, popups = await asyncio.wait_for(
+                    run_stop(idx, url), timeout=STOP_TIMEOUT)
+            except asyncio.TimeoutError:
+                verdict, tts, rss_peak, popups = (
+                    "TIMEOUT", None, None, 0)
+                log(f"stop={name}: hard stop timeout "
+                    f"({STOP_TIMEOUT}s) — counted as a failure", "ERROR")
             ok = verdict == "SHELL"
             fail_streak = 0 if ok else fail_streak + 1
             rss = f"{rss_peak}MB" if rss_peak is not None else "n/a"
@@ -1980,13 +2118,31 @@ async def main():
                 f"fail_streak={fail_streak}",
                 "OK" if ok else "WARN")
             if BREAKER and fail_streak >= BREAKER:
-                log(f"*** tour ABORTED after {BREAKER} consecutive "
-                    f"failed stops (last: {name} {verdict})", "ERROR")
-                sys.exit(1)
+                # Redesign 2026-11-12: the counter stays, the exit
+                # goes. First trip in a round restarts the local
+                # camofox server and the tour CONTINUES; a fresh
+                # streak after that restart backs off (skip the rest
+                # of the round) and never exits.
+                if restarts == 0 and ENGINE.restart_server():
+                    log(f"*** breaker tripped ({BREAKER} consecutive "
+                        f"failed stops, last: {name} {verdict}) — "
+                        "server restarted, tour continues", "ERROR")
+                    fail_streak = 0
+                    restarts += 1
+                else:
+                    log(f"*** breaker tripped ({BREAKER} consecutive "
+                        f"failed stops, last: {name} {verdict}) — "
+                        "skipping the rest of round "
+                        f"{rnd} (backoff {BREAKER_BACKOFF_S}s), "
+                        "tour continues", "ERROR")
+                    round_broken = True
+                    break
             if GAP:
                 await asyncio.sleep(GAP)
         log(f"=== round {rnd} complete in {time.time()-r0:.0f}s ===",
             "OK")
+        if round_broken:
+            await asyncio.sleep(BREAKER_BACKOFF_S)
         if MAX_ROUNDS and rnd >= MAX_ROUNDS:
             log(f"MAX_ROUNDS={MAX_ROUNDS} reached, exiting")
             return
