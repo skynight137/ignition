@@ -1,0 +1,13 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local environment / secrets (setup writes these on boxes, never in git)
+.env
+!.env.example
+
+# Tool caches and build output
+.ruff_cache/
+.pytest_cache/
+dist/
+state/

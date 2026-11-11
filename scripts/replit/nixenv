@@ -1,0 +1,24 @@
+#!/bin/bash
+# nixenv — run a command inside a mount namespace where /nix/store also shows the
+# per-user nix store (~/.store). Needed when /nix/store is mounted read-only and the
+# shipped local-overlay store is unusable (its lower dir /mnt/cacache is root-owned),
+# so `nix build` can only write to a store the loader would not otherwise see.
+#
+# Binaries built that way still carry a PT_INTERP and RUNPATH pointing at
+# /nix/store/<hash>; symlinking both stores into the namespace makes those paths
+# resolve. No root needed: unshare -r grants CAP_SYS_ADMIN inside the new namespace.
+set -u
+[ $# -ge 1 ] || { echo "usage: nixenv CMD [ARGS...]" >&2; exit 2; }
+exec unshare -rm --propagation private bash -c '
+  set -u
+  mkdir -p /tmp/nixlower
+  mount --bind /nix/store /tmp/nixlower || exit 1
+  mount -t tmpfs tmpfs /nix/store || exit 1
+  ln -s /tmp/nixlower/* /nix/store/ 2>/dev/null
+  # per-user store: REPL_HOME (persistent) wins over $HOME (wiped on restart)
+  _S="${REPL_HOME:-$HOME}/.store"
+  ln -s "$_S"/nix/store/* /nix/store/ 2>/dev/null
+  PATH="$(ls -d "$_S"/nix/store/*/bin 2>/dev/null | paste -sd: -):$PATH"
+  export PATH
+  exec "$@"
+' bash "$@"
