@@ -236,6 +236,16 @@ RCEOF
   engine_tailnet_join "$tsc" "$sock"
   __rs_ssh_hint "$user" "$ENGINE_TS_IP"
 
+  # Node stats beacon (design: heavenly-host designs/beacon-cc.md): a
+  # detached loop pushing a small self-report to the CC on muse-hop
+  # every 300s. Best-effort only — the loop dedups itself by pidfile,
+  # and a beacon problem must never fail the join.
+  local beacon_loop="$RS_SKILL_ROOT/../replit/beacon-loop.sh"
+  if [ -f "$beacon_loop" ]; then
+    ( setsid nohup bash "$beacon_loop" >/dev/null 2>&1 </dev/null & ) || true
+    ok "beacon: loop stats node dimulai (atau sudah jalan)"
+  fi
+
 
   # Workflow mode: a task whose command exits counts as DONE and the job is
   # reaped, so the daemons die with it — the task must stay in the foreground
