@@ -250,6 +250,11 @@ jobs:
           PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
         run: python3 -m py_compile scripts/*.py scripts/replit/*.py scripts/muse/*.py
 
+      - name: Beacon backlog regression (ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash tests/tsbeacon-backlog.sh
+
       # Skill discovery + cited-path audit lived here in the skills repo;
       # they audit SKILL.md content, which does not live in this repo
       # (machinery only). Parked with the split, 2026-11-11.
