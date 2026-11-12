@@ -8,6 +8,10 @@
 # Machine stats ONLY — no secrets, no user data. If the POST fails, the
 # payload is buffered in the
 # workspace and shipped inside the next successful beacon ("backlog").
+# Backlog entries are complete lines only, capped by count; a failed post
+# retries once without the backlog, so a poisoned backlog can never
+# deadlock the loop (repl-110, 2026-11-12: a byte-capped backlog cut a
+# line mid-string and every later post answered 400).
 #
 # Usage: tsbeacon.sh [node-name]   (default: TAILSCALE_NODE_NAME from the
 #        box's .replit userenv, else hostname)
@@ -39,20 +43,46 @@ DISK=$(df --output=pcent "$WS" 2>/dev/null | tail -1 | tr -dc '0-9')
 # it (and any other control byte) before the body is assembled.
 VERDICT=$(ls -t "$WS"/.local/state/workflow-logs/*/*.shell.exec.0 2>/dev/null | head -3 | xargs grep -h 'verdict=' 2>/dev/null | tail -1 | tr -d '\r' | tr -d '\000-\010\013\014\016-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | cut -c1-160)
 
-BACKLOG="[]"
-if [ -s "$BUFFER" ]; then
-  BACKLOG=$(head -c 4000 "$BUFFER" | awk 'BEGIN{printf "["} {printf "%s%s", (NR>1?",":""), $0} END{printf "]"}')
-fi
+# Backlog: complete lines only, newest first, capped. A byte cap (head -c)
+# can cut a JSON line mid-string, and the truncated fragment then poisons
+# every later post with a 400 — the CC rejects the whole body, the body is
+# buffered again, and the loop never recovers (repl-110, 2026-11-12).
+# Only backlog-less bodies are buffered, so buffered lines stay small and
+# self-contained instead of nesting previous backlogs inside each other.
+BACKLOG_MAX_LINES=5
+BUFFER_MAX_LINES=10
 
-BODY=$(printf '{"node":"%s","ts":"%s","uptime_s":%s,"tour_alive":%s,"camofox_ok":%s,"disk_pct":%s,"last_verdict":"%s","backlog":%s}' \
-  "$NODE" "$TS" "${UP:-0}" "$TOUR" "$CFOK" "${DISK:-0}" "$VERDICT" "$BACKLOG")
-LEN=$(printf '%s' "$BODY" | wc -c)
+build_backlog() {
+  if [ -s "$BUFFER" ]; then
+    tail -n "$BACKLOG_MAX_LINES" "$BUFFER" | awk 'BEGIN{printf "["} {printf "%s%s", (NR>1?",":""), $0} END{printf "]"}'
+  else
+    printf '[]'
+  fi
+}
+
+build_body() {
+  printf '{"node":"%s","ts":"%s","uptime_s":%s,"tour_alive":%s,"camofox_ok":%s,"disk_pct":%s,"last_verdict":"%s","backlog":%s}' \
+    "$NODE" "$TS" "${UP:-0}" "$TOUR" "$CFOK" "${DISK:-0}" "$VERDICT" "$1"
+}
 
 # Hold the pipe open after writing (sleep) — an instantly-closing stdin
 # makes tailscale nc tear the session down before the reply returns
 # (see tsfetch.sh). HTTP/1.0: the server closes after answering.
-RESP=$( (printf 'POST /beacon/%s HTTP/1.0\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n%s' "$NODE" "$HOST" "$LEN" "$BODY"; sleep 5) \
-  | timeout 30 "$TS_BIN" --socket="$TS_SOCK" nc "$HOST" "$PORT" 2>/dev/null | head -1 )
+post_body() {
+  _pb_len=$(printf '%s' "$1" | wc -c)
+  (printf 'POST /beacon/%s HTTP/1.0\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n%s' "$NODE" "$HOST" "$_pb_len" "$1"; sleep 5) \
+    | timeout 30 "$TS_BIN" --socket="$TS_SOCK" nc "$HOST" "$PORT" 2>/dev/null | head -1
+}
+
+buffer_body() {
+  mkdir -p "$(dirname "$BUFFER")"
+  printf '%s\n' "$1" >> "$BUFFER"
+  tail -n "$BUFFER_MAX_LINES" "$BUFFER" > "$BUFFER.tmp" && mv "$BUFFER.tmp" "$BUFFER"
+}
+
+BACKLOG=$(build_backlog)
+BODY=$(build_body "$BACKLOG")
+RESP=$(post_body "$BODY")
 
 case "$RESP" in
   *" 200 "*)
@@ -60,9 +90,27 @@ case "$RESP" in
     echo "tsbeacon: $NODE ok"
     ;;
   *)
-    mkdir -p "$(dirname "$BUFFER")"
-    printf '%s\n' "$BODY" >> "$BUFFER"
-    echo "tsbeacon: $NODE buffered (resp: ${RESP:-none})" >&2
-    exit 1
+    # A failed post with a backlog may be the backlog's fault (a poisoned
+    # line written by an older build). Retry once without it: a poisoned
+    # backlog must never deadlock the loop.
+    if [ "$BACKLOG" != "[]" ]; then
+      BODY_NB=$(build_body "[]")
+      RESP_NB=$(post_body "$BODY_NB")
+      case "$RESP_NB" in
+        *" 200 "*)
+          [ -s "$BUFFER" ] && : > "$BUFFER"
+          echo "tsbeacon: $NODE ok (backlog dropped)"
+          ;;
+        *)
+          buffer_body "$BODY_NB"
+          echo "tsbeacon: $NODE buffered (resp: ${RESP_NB:-none})" >&2
+          exit 1
+          ;;
+      esac
+    else
+      buffer_body "$BODY"
+      echo "tsbeacon: $NODE buffered (resp: ${RESP:-none})" >&2
+      exit 1
+    fi
     ;;
 esac
