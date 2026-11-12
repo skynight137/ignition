@@ -246,6 +246,18 @@ RCEOF
     ok "beacon: loop stats node dimulai (atau sudah jalan)"
   fi
 
+  # Camofox crash-report shim (design: heavenly-host
+  # docs/camofox-collector-investigation.md): a supervisor loop keeping
+  # the loopback receiver alive. The camofox server POSTs its
+  # crash/hang/stuck-loop reports to the shim, which forwards them to
+  # the CC on muse-hop over `tailscale nc`. Same best-effort contract
+  # as the beacon: dedup by pidfile, never fails the join.
+  local shim_loop="$RS_SKILL_ROOT/../replit/crash-shim-loop.sh"
+  if [ -f "$shim_loop" ]; then
+    ( setsid nohup bash "$shim_loop" >/dev/null 2>&1 </dev/null & ) || true
+    ok "crash-shim: supervisor loop dimulai (atau sudah jalan)"
+  fi
+
 
   # Workflow mode: a task whose command exits counts as DONE and the job is
   # reaped, so the daemons die with it — the task must stay in the foreground
