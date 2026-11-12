@@ -28,6 +28,11 @@
 #                               passwd needs the pointer). Legacy boxes
 #                               also get ~/.ssh as a symlink -> <ws>/.ssh;
 #                               a fresh box's ~/.ssh IS the store.
+#   Termix user units (when installed under ~/.config/systemd/user/):
+#                               the join re-asserts the /root pointer,
+#                               logind, and root lingering on every
+#                               start, so the units auto-start after a
+#                               redeploy (see reassert_termix_user_units).
 #
 # Usage (mirrors the replit setup's shape: phase flags + an interactive
 # menu, instead of one monolith that beelines to the join):
@@ -255,6 +260,45 @@ alloc_claim_port() {
   return 1
 }
 
+# reassert_termix_user_units — restore the Termix user-manager stack
+# after a redeploy (proven by redeploy #15, 2026-11-13 01:01 WIB):
+# the Termix units live as USER units under $HOME/.config/systemd/user/
+# (files survive — they are under ~), but three things do NOT survive:
+#   (1) the /root/.config/systemd/user symlink (root's user manager
+#       reads HOME=/root from passwd, not the runtime $HOME),
+#   (2) systemd-logind (is-enabled static is NOT auto-start at boot;
+#       nothing pulls it in here, so it is inactive after a boot),
+#   (3) the linger flag in /var/lib/systemd/linger (outside ~).
+# Without all three, user@0 never starts and the enabled Termix units
+# stay down (8080: 000). Re-asserting all three lets the units
+# auto-start on their own via default.target.wants — no manual start.
+# Guarded: no-op when the Termix user units are not installed
+# (other Muse VMs never migrated), and never fatal to the join.
+reassert_termix_user_units() {
+  local user_units="$HOME/.config/systemd/user"
+  [[ -f "$user_units/termix-backend.service" ]] || return 0
+  command -v systemctl >/dev/null 2>&1 || return 0
+  command -v loginctl >/dev/null 2>&1 || return 0
+  # (1) the /root pointer: only touch it when it is a symlink or
+  # absent — a real directory there would be a divergent copy, not
+  # ours to delete.
+  if [[ "$(readlink /root/.config/systemd/user 2>/dev/null)" != "$user_units" ]]; then
+    if [[ -L /root/.config/systemd/user || ! -e /root/.config/systemd/user ]]; then
+      mkdir -p /root/.config/systemd
+      rm -f /root/.config/systemd/user
+      ln -s "$user_units" /root/.config/systemd/user
+    else
+      echo "[termix] /root/.config/systemd/user is a real directory, leaving it alone" >&2
+    fi
+  fi
+  # (2) logind must be running before linger can be enabled.
+  systemctl start systemd-logind 2>/dev/null || true
+  # (3) lingering starts user@0 immediately and at every boot after;
+  # the enabled user units then start on their own.
+  loginctl enable-linger root 2>/dev/null || true
+  return 0
+}
+
 start_sshd() {
   # (Re)start the join sshd as $SSH_USER on 6800. Run as root after a
   # redeploy: /etc/passwd + /run + /root/.ssh are ephemeral; everything
@@ -262,6 +306,9 @@ start_sshd() {
   # re-asserted on every call (without it, both test boxes needed
   # manual permission surgery before sshd would start).
   if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
+  # Termix user units (when installed): re-assert the three ephemeral
+  # pieces the redeploy wipes, so the units auto-start with user@0.
+  reassert_termix_user_units || true
   chmod o+x "$HOME" "$WS"
   # The store root itself needs the same guarantee, and opening its
   # ancestors is not enough: on a fresh box the store IS ~/.ssh, and
