@@ -190,6 +190,24 @@ exits without opening anything.
 """
 import asyncio, json, os, shutil, signal, socket, subprocess, sys, time, urllib.error, urllib.request
 
+# Ignition version stamp: the short HEAD of the checkout this tour runs
+# from, carried on every verdict line so a beacon reader can see which
+# code version produced the verdict (an un-pulled node stays visible).
+# Resolved once at import; "unknown" when git cannot answer.
+def _ignition_head():
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+IGNITION_HEAD = _ignition_head()
+
 # ── engine selection ───────────────────────────────────────────────────
 # Resolved BEFORE the rest of config: the .env fallback file lives in
 # the chosen engine's home, so the engine must be known first. CLI
@@ -1322,7 +1340,7 @@ async def run_stop_lightpanda(idx, url):
             else:
                 if last_title and "Just a moment" in last_title:
                     verdict = "CF-STALL"
-                log(f"stop {name}: poll deadline, verdict={verdict} "
+                log(f"stop {name}: ignition={IGNITION_HEAD} poll deadline, verdict={verdict} "
                     f"last_title={last_title!r}", "WARN")
 
             if verdict == "SHELL":
@@ -1636,7 +1654,7 @@ async def run_stop_pw(idx, url, sess):
         else:
             if last_title and "Just a moment" in last_title:
                 verdict = "CF-STALL"
-            log(f"stop {name}: poll deadline, verdict={verdict} "
+            log(f"stop {name}: ignition={IGNITION_HEAD} poll deadline, verdict={verdict} "
                 f"last_title={last_title!r}", "WARN")
         if verdict == "SHELL":
             popups += await lp_dismiss_popups(page, name)
@@ -1983,7 +2001,7 @@ def run_stop_camofox(idx, url):
         else:
             if last_title and "Just a moment" in last_title:
                 verdict = "CF-STALL"
-            log(f"stop {name}: poll deadline, verdict={verdict} "
+            log(f"stop {name}: ignition={IGNITION_HEAD} poll deadline, verdict={verdict} "
                 f"last_title={last_title!r}", "WARN")
 
         if verdict == "SHELL":
@@ -2112,7 +2130,7 @@ async def main():
             ok = verdict == "SHELL"
             fail_streak = 0 if ok else fail_streak + 1
             rss = f"{rss_peak}MB" if rss_peak is not None else "n/a"
-            log(f"stop={name} verdict={verdict} "
+            log(f"stop={name} ignition={IGNITION_HEAD} verdict={verdict} "
                 f"time_to_shell={tts} dwell={DWELL}s rss_peak={rss} "
                 f"popups_dismissed={popups} "
                 f"fail_streak={fail_streak}",

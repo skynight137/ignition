@@ -38,6 +38,7 @@ if pgrep -f '[t]our.py' >/dev/null 2>&1; then TOUR=true; else TOUR=false; fi
 CF=$(curl -s --max-time 4 http://127.0.0.1:9377/health 2>/dev/null | grep -c '"ok":true' || true)
 [ "${CF:-0}" -ge 1 ] && CFOK=true || CFOK=false
 DISK=$(df --output=pcent "$WS" 2>/dev/null | tail -1 | tr -dc '0-9')
+IGNITION=$(git -C "$WS/ignition" rev-parse --short HEAD 2>/dev/null || echo unknown)
 # Workflow logs end lines with CR (Replit shell logs are CRLF); a raw CR
 # inside the JSON string is invalid JSON and the CC answers 400. Strip
 # it (and any other control byte) before the body is assembled.
@@ -61,8 +62,8 @@ build_backlog() {
 }
 
 build_body() {
-  printf '{"node":"%s","ts":"%s","uptime_s":%s,"tour_alive":%s,"camofox_ok":%s,"disk_pct":%s,"last_verdict":"%s","backlog":%s}' \
-    "$NODE" "$TS" "${UP:-0}" "$TOUR" "$CFOK" "${DISK:-0}" "$VERDICT" "$1"
+  printf '{"node":"%s","ignition":"%s","ts":"%s","uptime_s":%s,"tour_alive":%s,"camofox_ok":%s,"disk_pct":%s,"last_verdict":"%s","backlog":%s}' \
+    "$NODE" "$IGNITION" "$TS" "${UP:-0}" "$TOUR" "$CFOK" "${DISK:-0}" "$VERDICT" "$1"
 }
 
 # Hold the pipe open after writing (sleep) — an instantly-closing stdin
