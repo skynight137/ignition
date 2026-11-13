@@ -754,14 +754,9 @@ EOF
   local target
   target="$(cd -- "$dir" && pwd)/$(basename "$REPLIT_BASHRC_FILE")"
 
-  local -a py=()
-  if ! replit_resolve_py py; then
-    err "no tomlkit-capable python and provisioning failed — REPLIT_BASHRC pin NOT written to $replit_file (workflow shells keep the platform env; check network access to astral.sh / PyPI, then re-run)"
-    return 1
-  fi
-
-  if ! "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$replit_file" \
-       --set "REPLIT_BASHRC=$target"; then
+  # dotreplit.py is stdlib-only — no tomlkit python to resolve, no
+  # provisioning. Plain python3 on PATH is the only requirement.
+  if ! python3 "$REPL_SKILL_DIR/dotreplit.py" set-env "$replit_file" REPLIT_BASHRC "$target"; then
     warn ".replit REPLIT_BASHRC pin failed — workflow shells keep the platform env"
     return 0
   fi
@@ -889,86 +884,36 @@ rescue_tool_lines() {
   done
 }
 
-# [userenv.shared] manager ──────────────────────────────────────────────────
+# [userenv.shared] manager ─────────────────────────────────────────────────────────────────────
 # The shell rc reaches shells that reach it — interactive consoles directly,
 # and Replit workflow/agent shells through the REPLIT_BASHRC shim
 # (write_replit_bashrc). So the rc block is the single global source for tool
 # vars; [userenv.shared] keeps ONLY the REPLIT_BASHRC pin. ALL TOML
-# manipulation lives in scripts/dot_replit.py (tomlkit): keys are added,
-# updated in place, or deleted by NAME inside the table — no marker comments,
-# no sed/awk line surgery. Everything else in .replit (workflows, ports, the
-# operator's own keys) round-trips untouched.
+# manipulation lives in scripts/replit/dotreplit.py (stdlib-only: no
+# tomlkit, no provisioning, no uv venv — plain python3): keys are added,
+# updated in place, or deleted by NAME inside the table, with parse +
+# schema + key-preservation verification on every write. Everything else
+# in .replit (workflows, ports, the operator's own keys) round-trips
+# untouched.
 
-# Provision setup's own tomlkit venv ($TOML_VENV) and resolve its python
-# into the array named $1. Ensures uv first (installing it via the uv
-# lane's machinery when the lane never ran on this box), then creates the
-# venv and installs tomlkit into it. Idempotent: a venv whose python
-# imports tomlkit is left exactly as is. Returns 1 when provisioning is
-# impossible (no network for the uv installer / Python / tomlkit fetches).
-provision_toml_venv() {
-  local -n _pv="$1"
-  local uv_bin=""
-  ensure_uv_bin uv_bin || return 1
-  if [[ -x "$TOML_VENV/bin/python3" ]] \
-    && "$TOML_VENV/bin/python3" -c 'import tomlkit' 2>/dev/null; then
-    _pv=("$TOML_VENV/bin/python3")
-    return 0
-  fi
-  step "Provisioning a tomlkit-capable python (setup venv: $TOML_VENV)"
-  if [[ ! -x "$TOML_VENV/bin/python3" ]]; then
-    # A half-created venv from an interrupted run cannot be reused —
-    # uv venv refuses a non-empty target. It is setup-owned state.
-    rm -rf "$TOML_VENV"
-    UV_PYTHON_DOWNLOADS=auto UV_PYTHON_PREFERENCE=managed \
-      "$uv_bin" venv "$TOML_VENV" &>/dev/null || return 1
-  fi
-  "$uv_bin" pip install --python "$TOML_VENV/bin/python" tomlkit &>/dev/null || return 1
-  "$TOML_VENV/bin/python3" -c 'import tomlkit' 2>/dev/null || return 1
-  _pv=("$TOML_VENV/bin/python3")
-  ok "tomlkit python provisioned: $TOML_VENV/bin/python3 (tomlkit $("$TOML_VENV/bin/python3" -c 'import tomlkit; print(tomlkit.__version__)' 2>/dev/null))"
-}
-
-# Resolve a tomlkit-capable interpreter into the array named $1, and a
-# human description of the source into $TOML_PY_DESC. Order (every
-# candidate must actually PASS `import tomlkit` — presence is not proof):
-#   1. the project .venv's python3;
-#   2. any python3 on PATH;
-#   3. setup's provisioned toml venv ($TOML_VENV);
-#   4. uv (PATH, then $XDG_BIN_HOME/uv) fetching tomlkit on demand;
-#   5. PROVISION the venv via uv (provision_toml_venv) — setup prepares
-#      its own TOML writer instead of warning and skipping (user,
-#      2026-11-07: the REPLIT_BASHRC pin must land).
-# Step 5 is skipped when SETUP_TOML_NO_PROVISION=1 (read-only probes —
-# --doctor reports, it never installs). Returns 1 when nothing qualifies
-# and provisioning is disabled or fails.
-TOML_PY_DESC=""
-replit_resolve_py() {
-  local -n _py="$1"
-  TOML_PY_DESC=""
-  if [[ -x "$WORKSPACE/.venv/bin/python3" ]] \
-    && "$WORKSPACE/.venv/bin/python3" -c 'import tomlkit' 2>/dev/null; then
-    _py=("$WORKSPACE/.venv/bin/python3")
-    TOML_PY_DESC="project .venv ($WORKSPACE/.venv/bin/python3)"
-  elif command -v python3 &>/dev/null && python3 -c 'import tomlkit' 2>/dev/null; then
-    _py=(python3)
-    TOML_PY_DESC="PATH python3 ($(command -v python3))"
-  elif [[ -x "$TOML_VENV/bin/python3" ]] \
-    && "$TOML_VENV/bin/python3" -c 'import tomlkit' 2>/dev/null; then
-    _py=("$TOML_VENV/bin/python3")
-    TOML_PY_DESC="setup toml venv ($TOML_VENV/bin/python3)"
-  elif command -v uv &>/dev/null \
-    && uv run --no-project --with tomlkit python3 -c 'import tomlkit' 2>/dev/null; then
-    _py=(uv run --no-project --with tomlkit python3)
-    TOML_PY_DESC="uv run --with tomlkit ($(command -v uv))"
-  elif [[ -x "$XDG_BIN_HOME/uv" ]] \
-    && "$XDG_BIN_HOME/uv" run --no-project --with tomlkit python3 -c 'import tomlkit' 2>/dev/null; then
-    _py=("$XDG_BIN_HOME/uv" run --no-project --with tomlkit python3)
-    TOML_PY_DESC="uv run --with tomlkit ($XDG_BIN_HOME/uv)"
-  elif [[ "${SETUP_TOML_NO_PROVISION:-0}" != 1 ]] && provision_toml_venv _py; then
-    TOML_PY_DESC="setup toml venv ($TOML_VENV/bin/python3)"
-  else
-    return 1
-  fi
+# Delete [userenv.shared] keys via dotreplit.py, one key per invocation
+# (del-env is single-key). Keys ABSENT from the file are skipped (envlen
+# rc 3): del-env fails on a missing key, and the delete lists here are
+# built from the tool/registry universe, not from the file's contents, so
+# absent keys are the normal case, not an error. A real failure (parse /
+# schema / verify) returns non-zero. When the last key leaves
+# [userenv.shared] empty, dotreplit.py drops the table (and [userenv]
+# when it has nothing left), matching the old writer.
+dotreplit_del_keys() {
+  local file="$1"; shift
+  local key
+  for key in "$@"; do
+    python3 "$REPL_SKILL_DIR/dotreplit.py" envlen "$file" "$key" >/dev/null 2>&1 || continue
+    if ! python3 "$REPL_SKILL_DIR/dotreplit.py" del-env "$file" "$key"; then
+      return 1
+    fi
+  done
+  return 0
 }
 
 # The fixed registry override NAMES. Legacy [userenv.shared] keys are deleted
@@ -1048,22 +993,20 @@ strip_userenv_keys() {
   # tool — removing it on a per-tool clean would silently disable the
   # workflow/agent-shell toolchain fix. Only a full wipe ('all') drops it.
   local -a del=()
-  [[ "$labels" == all ]] && del+=(--delete-key REPLIT_BASHRC)
+  [[ "$labels" == all ]] && del+=(REPLIT_BASHRC)
   for var in "${!_WIRE_OWNER[@]}"; do
     [[ "$var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue   # skip PATH dirs
     owner="$(env_var_owner "$var")"
     [[ -n "$owner" ]] || continue
     if [[ "$labels" == all ]] || owned_only_by "$owner" "$labels"; then
-      del+=(--delete-key "$var")
+      del+=("$var")
     fi
   done
   if [[ "$labels" == all ]]; then
-    for var in "${_REGISTRY_ENV_VARS[@]}"; do del+=(--delete-key "$var"); done
+    for var in "${_REGISTRY_ENV_VARS[@]}"; do del+=("$var"); done
   fi
   ((${#del[@]})) || return 0
-  local -a py=()
-  replit_resolve_py py || { err "no tomlkit-capable python and provisioning failed — $file userenv keys left untouched (check network access to astral.sh / PyPI, then re-run)"; return 1; }
-  if "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$file" "${del[@]}"; then
+  if dotreplit_del_keys "$file" "${del[@]}"; then
     ok "Removed $labels-owned userenv keys from $file"
   else
     warn "userenv key cleanup failed for $file — edit it by hand"
@@ -1100,17 +1043,10 @@ write_replit_env() {
   # rescue_userenv_keys.
   rescue_userenv_keys "$replit_file"
 
-  # This function only resolves an interpreter, snapshots a backup and
-  # builds the key universe. The helper (tomlkit) clears every managed key
-  # (--delete-key), re-adds the ones surviving the no-shadowing rule
-  # (--set), then tomllib-validates and atomically replaces the file. The
-  # backup is the revert path.
-  local -a py=()
-  if ! replit_resolve_py py; then
-    rm -f "$backup"
-    err "no tomlkit-capable python and provisioning failed — .replit userenv untouched (check network access to astral.sh / PyPI, then re-run)"
-    return 1
-  fi
+  # This function snapshots a backup and builds the key universe. The
+  # helper (dotreplit.py, stdlib-only) clears every managed key
+  # (del-env), then tomllib-validates and rewrites the file in place with
+  # a backup + key-preservation check. The backup is the revert path.
 
   # [userenv.shared] now keeps ONLY the REPLIT_BASHRC pin (set by
   # write_replit_bashrc). Tool/registry vars used to be written here as the
@@ -1127,11 +1063,10 @@ write_replit_env() {
   for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"} "${_REGISTRY_ENV_VARS[@]}"; do
     [[ -n "${seen[$var]:-}" ]] && continue
     seen["$var"]=1
-    delete_args+=(--delete-key "$var")
+    delete_args+=("$var")
   done
 
-  if ! "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$replit_file" \
-      "${delete_args[@]}"; then
+  if ! dotreplit_del_keys "$replit_file" "${delete_args[@]}"; then
     mv -f "$backup" "$replit_file"
     die ".replit userenv update failed — reverted to backup"
   fi

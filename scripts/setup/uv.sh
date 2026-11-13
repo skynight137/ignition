@@ -32,7 +32,7 @@ uv_asset_name() {
 
 # Download + verify + stage the pinned uv into $XDG_BIN_HOME.
 # Returns non-zero on any failure and never dies: install_uv turns a
-# failure into a die; ensure_uv_bin turns it into a soft miss.
+# failure into a die.
 _uv_install_pinned() {
   command -v curl >/dev/null 2>&1 || return 1
   command -v tar >/dev/null 2>&1 || return 1
@@ -78,29 +78,4 @@ install_uv() {
   record_tool_env_vars UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
-}
-
-# Resolve a runnable uv into the variable named $1 — PATH first, then the
-# lane's own install home — INSTALLING the pinned release (same
-# _uv_install_pinned as install_uv) when neither has one. Unlike install_uv
-# this never dies and never reinstalls over an existing binary: it exists for
-# machinery that needs uv as a means to an end (the tomlkit provisioning in
-# rc.sh) on boxes where the uv lane itself never ran. Returns 1 when uv
-# cannot be obtained (no curl, no network, download/verify failure).
-ensure_uv_bin() {
-  local -n _uv_out="$1"
-  if command -v uv &>/dev/null; then
-    _uv_out="$(command -v uv)"
-    return 0
-  fi
-  if [[ -x "$XDG_BIN_HOME/uv" ]]; then
-    _uv_out="$XDG_BIN_HOME/uv"
-    return 0
-  fi
-  command -v curl &>/dev/null || return 1
-  step "uv not found — installing the pinned release (needed to provision the tomlkit python)"
-  _uv_install_pinned || return 1
-  [[ -x "$XDG_BIN_HOME/uv" ]] || return 1
-  _uv_out="$XDG_BIN_HOME/uv"
-  ok "uv installed: $_uv_out"
 }

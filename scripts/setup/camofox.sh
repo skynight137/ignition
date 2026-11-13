@@ -568,7 +568,7 @@ PY
     appended)   ok "camofox: added [nix] channel = \"$CAMOFOX_NIX_CHANNEL\" to .replit (without it replit.nix triggers recovery mode and never rebuilds)" ;;
     *)          warn "camofox: unexpected [nix] channel result: $out" ;;
   esac
-  # A malformed .replit breaks every later dot_replit / setup run — verify.
+  # A malformed .replit breaks every later dotreplit / setup run — verify.
   python3 -c "import tomllib; tomllib.load(open('$f','rb'))" 2>/dev/null \
     || warn "camofox: .replit no longer parses as TOML after the channel edit — check $f"
 }
