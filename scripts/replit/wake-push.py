@@ -12,8 +12,8 @@ Best-effort: one attempt, exit 1 on failure, no retry, no buffering (the
 logs stay on the node; the periodic beacon loop keeps running).
 
 Prototype scope: run manually on repl-0 (simulated wake). The boot trigger
-(a workflow task after tailscale-join, or the beacon loop's first post) is
-a separate step after this prototype is confirmed.
+is trigger B: beacon-loop.sh runs this script once on its first post after
+(re)start (WAKE_PUSH=0 skips it).
 
 Interpreter: /repl/tools/bin/python3 (the default Replit python3 — bare
 `python3` is not on the PATH in a non-interactive shell, and the tour's
