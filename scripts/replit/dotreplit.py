@@ -240,6 +240,19 @@ def op_set_env(path, key, value):
     return guarded_edit(path, mutate)
 
 
+def _drop_empty_table(lines, header):
+    """Drop a section header whose span holds no key lines. No-op when the
+    header is absent or the section still carries keys (a dotted key
+    counts as a key)."""
+    span = find_span(lines, header)
+    if span is None:
+        return
+    s, e = span
+    key_re = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_.]*\s*=")
+    if not any(key_re.match(lines[i]) for i in range(s + 1, e)):
+        del lines[s]
+
+
 def op_del_env(path, key):
     def mutate(lines):
         span = _env_span(lines)
@@ -250,9 +263,20 @@ def op_del_env(path, key):
         for i in range(s + 1, e):
             if kv.match(lines[i]):
                 del lines[i]
-                return lines
-        return None
-    return guarded_edit(path, mutate, intended_removed_prefixes=(f"userenv.shared.{key}",))
+                break
+        else:
+            return None
+        # An emptied [userenv.shared] is dropped, not left as a bare
+        # header (the old tomlkit writer's behaviour, preserved here so
+        # a full clean leaves no empty table behind). Same for [userenv]
+        # when it has no subsection left. The header is only dropped when
+        # the span holds no key lines, so the only key the guard forgives
+        # under these prefixes is the one this op deleted.
+        _drop_empty_table(lines, "[userenv.shared]")
+        _drop_empty_table(lines, "[userenv]")
+        return lines
+    return guarded_edit(path, mutate, intended_removed_prefixes=(
+        f"userenv.shared.{key}", "userenv.shared", "userenv"))
 
 
 def op_set_waitforport(path, workflow, port):

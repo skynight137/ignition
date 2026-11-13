@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # kind is --machine, not a directory):
 SETUP_LIB_DIR="$SCRIPT_DIR"               # scripts/setup — core.sh, join.sh (engine), profiles, every lane
 # scripts/replit — REPL-ONLY payloads: the runtime files a repl box
-# executes (dot_replit.py, the probes, the chromium
+# executes (dotreplit.py, the probes, the chromium
 # launcher) plus the nix machinery the lanes invoke (nixenv,
 # resolve-libs.sh, generate-closure.sh, libpool.sh). Lanes reach them
 # ONLY through this var — never a spelled-out ../replit path.

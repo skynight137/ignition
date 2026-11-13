@@ -3,12 +3,6 @@
 JAVA_HOME="$XDG_DATA_HOME/java"
 SDK="$XDG_DATA_HOME/android-sdk"
 NODE_DIR="$XDG_DATA_HOME/node"
-# Setup's OWN runtime venv: the one interpreter guaranteed to carry tomlkit
-# for the .replit writers (rc.sh replit_resolve_py provisions it via uv
-# when no candidate python qualifies). Under a setup/ subdir of the data
-# home — not a tool home, so no single tool's --clean removes it, and it
-# persists with the rest of the toolchain state.
-TOML_VENV="$XDG_DATA_HOME/setup/toml-venv"
 # npm's ONLY global prefix (where `-g` installs actually land — Replit pins
 # this via the inherited env). Captured BEFORE the node-toolchain override
 # below so clean_* can uninstall globally-installed packages from the real

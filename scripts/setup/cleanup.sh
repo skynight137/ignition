@@ -604,10 +604,10 @@ clean() {
   case "$CLEAN_TARGET" in
     all)
       step "Cleaning entire toolchain"
-      # Strip env wiring FIRST: strip_userenv_keys needs a tomlkit-capable
-      # interpreter, and clean_uv deletes uv — one tomlkit source (the
-      # provisioned $TOML_VENV is another) — as a side effect of removing
-      # binaries. Stripping first keeps every source available.
+      # Strip env wiring FIRST: the .replit/.bashrc edits must land while
+      # the toolchain is still intact (clean_* removes binaries + payload
+      # the edits may reference). Stripping first keeps every source
+      # available.
       # 'all' is the ONLY path that strips env wiring (the rc / .replit
       # managed blocks) — per-target clean removes binaries + payload only.
       if [[ -f "$BASHRC" ]]; then
@@ -619,7 +619,7 @@ clean() {
       # Only replit mode ever wrote a userenv block — don't touch .replit
       # otherwise (default mode is .bashrc-only by design). strip_userenv_keys
       # checks writability and removes every managed key (an emptied
-      # [userenv.shared] table is dropped by the tomlkit writer).
+      # [userenv.shared] table is dropped by the dotreplit writer).
       if [[ "$REPLIT_MODE" == true && -f "$replit_file" ]]; then
         strip_userenv_keys all "$replit_file"
       fi
@@ -648,9 +648,8 @@ clean() {
       ok "Full toolchain cleanup complete"
       ;;
     android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
-      # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
-      # needs a tomlkit-capable interpreter; clean_uv deletes uv, one of the
-      # sources), then remove the binaries + payload. Labels here differ from
+      # Drop this tool's wiring from the managed blocks FIRST, then remove
+      # the binaries + payload. Labels here differ from
       # wire_tool ownership labels: android-tools -> android, oc -> opencode.
       local wire_label="$CLEAN_TARGET"
       case "$wire_label" in
@@ -703,9 +702,7 @@ clean() {
       fi
       summary="$(IFS=','; echo "${CLEAN_TOOLS[*]}")"
       hint="bash setup.sh"
-      # Drop env wiring FIRST (strip_userenv_keys needs a tomlkit-capable
-      # interpreter; clean_uv deletes uv, one of the sources), then remove
-      # the ticked binaries + payload.
+      # Drop env wiring FIRST, then remove the ticked binaries + payload.
       [[ -f "$BASHRC" ]] && strip_tool_wiring "${CLEAN_TOOLS[*]}" "$BASHRC"
       [[ " ${CLEAN_TOOLS[*]} " == *" hermes "* ]] && strip_legacy_hermes_block "$BASHRC" || true
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"

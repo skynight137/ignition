@@ -14,10 +14,9 @@
 #   xdg-absent      setup.sh --help with every XDG var unset — the
 #                   "terkadang XDG tidak ada dan menyebabkan bugs" class.
 #                   Runs when shared machinery changed (or full runs).
-#   tomlkit-provision
-#                   fresh-box case: no tomlkit python and no uv on the
-#                   runner — setup must provision both itself so the
-#                   REPLIT_BASHRC pin lands (tests/tomlkit-provision.sh).
+#   dotreplit-pin   fresh-box case: no tomlkit python and no uv on the
+#                   runner — the REPLIT_BASHRC pin must land anyway, via
+#                   the stdlib-only dotreplit.py (tests/dotreplit-pin.sh).
 #                   Same gating as xdg-absent.
 #   tool-setups     per-tool install tests: each setup.sh lane installs
 #                   into an isolated root and must pass setup's own
@@ -89,8 +88,8 @@ jobs:
               - 'tests/tool-setup.sh'
             ci:
               - '.github/workflows/ci.yml'
-            tomlkit:
-              - 'tests/tomlkit-provision.sh'
+            dotreplit:
+              - 'tests/dotreplit-pin.sh'
             uv:
               - 'scripts/setup/uv.sh'
             node_opencode:
@@ -212,7 +211,7 @@ jobs:
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           SHARED=false
           if [ "$FULL" = "true" ]; then SHARED=true; fi
-          if [ "${{ steps.filter.outputs.tomlkit }}" = "true" ]; then SHARED=true; fi
+          if [ "${{ steps.filter.outputs.dotreplit }}" = "true" ]; then SHARED=true; fi
           echo "shared=$SHARED" >> "$GITHUB_OUTPUT"
           echo "scope: full=$FULL shared=$SHARED lanes=$(printf '%s' "$MATRIX" | jq '.include | length')"
 
@@ -312,8 +311,8 @@ jobs:
           fi
           echo "standalone XDG reads guarded"
 
-  tomlkit-provision:
-    name: tomlkit provisioning (ubuntu)
+  dotreplit-pin:
+    name: dotreplit pin (ubuntu)
     needs: changes
     if: needs.changes.outputs.shared == 'true'
     runs-on: ubuntu-latest
@@ -322,13 +321,14 @@ jobs:
       - uses: actions/checkout@v4
 
       # The runner IS the fresh-box case: its python3 has no tomlkit and
-      # uv is not installed, so setup must provision both itself for the
-      # REPLIT_BASHRC pin to land. tests/tomlkit-provision.sh asserts on
-      # the pin + the doctor `toml python:` line + idempotency.
-      - name: setup provisions tomlkit; REPLIT_BASHRC pin lands
+      # uv is not installed, so the REPLIT_BASHRC pin must land via the
+      # stdlib-only dotreplit.py with no provisioning. tests/dotreplit-pin.sh
+      # asserts on the pin + the doctor `dotreplit writer:` line + no
+      # tomlkit references + idempotency.
+      - name: REPLIT_BASHRC pin lands via dotreplit.py (no tomlkit, no uv)
         env:
-          SETUP_ROOT: ${{ runner.temp }}/ws-tomlkit
-        run: bash tests/tomlkit-provision.sh
+          SETUP_ROOT: ${{ runner.temp }}/ws-dotreplit
+        run: bash tests/dotreplit-pin.sh
 
   tool-setups:
     name: Tool setup (${{ matrix.tool }}, ${{ matrix.os }})

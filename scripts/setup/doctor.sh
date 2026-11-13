@@ -82,16 +82,14 @@ doctor() {
       warn "lightpanda tour venv missing or playwright not importable (${LIGHTPANDA_HOME:-}/venv) — the tour cannot run; run: bash setup.sh --lightpanda"
     fi
   fi
-  # The .replit TOML writer's interpreter. Doctor is READ-ONLY: probe with
-  # provisioning disabled — a miss here is not a failure, because the next
-  # setup write provisions uv + a tomlkit venv itself (rc.sh). The line
-  # exists so a fleet audit can see WHICH source each box resolves.
-  local -a _tpy=()
-  if SETUP_TOML_NO_PROVISION=1 replit_resolve_py _tpy; then
-    local _tver; _tver="$("${_tpy[@]}" -c 'import tomlkit; print(tomlkit.__version__)' 2>/dev/null)"
-    ok "toml python: $TOML_PY_DESC (tomlkit ${_tver:-unknown})"
+  # The .replit TOML writer's interpreter. dotreplit.py is stdlib-only, so
+  # the only requirement is a python3 (3.11+ for tomllib; the script falls
+  # back to tomli below that). No provisioning, no uv, no venv — a miss
+  # here means .replit edits cannot run at all.
+  if command -v python3 &>/dev/null; then
+    ok "dotreplit writer: python3 $(command -v python3) (stdlib, no provisioning)"
   else
-    warn "toml python: none tomlkit-capable yet — the next setup write provisions one (uv + $TOML_VENV)"
+    warn "dotreplit writer: no python3 on PATH — .replit edits will fail; install python3"
   fi
   # llm-wiki is a server, not a CLI: there is no --version to probe, so check the
   # installed bundle instead. Warn-only — the server is opt-in and a box that
