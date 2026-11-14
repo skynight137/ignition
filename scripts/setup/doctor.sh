@@ -74,6 +74,23 @@ doctor() {
   check_tool "Lightpanda" "$XDG_BIN_HOME/lightpanda" version
   # Moli takes the --version FLAG (its `version` is not a subcommand).
   check_tool "Moli" "$XDG_BIN_HOME/moli" --version
+  # Tor takes the --version FLAG; the launcher shim sets the bundled lib
+  # path, so probe through the shim (a bare bundle binary dies on
+  # libevent). The SOCKS egress check is read-only and only runs when
+  # the daemon is already up: a live proxy returning IsTor=true proves
+  # the egress is Tor, not the box's direct IP. Not a failure when the
+  # daemon is simply not running (on-demand start: tor-browser).
+  check_tool "Tor" "$XDG_BIN_HOME/tor" --version
+  if [[ -x "$XDG_BIN_HOME/tor" ]]; then
+    local _tor_socks="${TOR_SOCKS_PORT:-9050}"
+    if curl -s --max-time 30 --socks5-hostname "127.0.0.1:$_tor_socks" https://check.torproject.org/api/ip 2>/dev/null | grep -q '"IsTor":true'; then
+      ok "tor SOCKS egress: check.torproject.org confirms IsTor=true (127.0.0.1:$_tor_socks)"
+    elif curl -s --max-time 2 "http://127.0.0.1:$_tor_socks" >/dev/null 2>&1; then
+      warn "tor SOCKS port answers but check.torproject.org did not confirm IsTor — the daemon may still be bootstrapping; run: tor-browser --check"
+    else
+      warn "tor installed but the daemon is not running (SOCKS 127.0.0.1:$_tor_socks silent) — start on demand: tor-browser <url>"
+    fi
+  fi
   if [[ -x "$XDG_BIN_HOME/lightpanda" ]]; then
     if [[ -x "${LIGHTPANDA_HOME:-}/venv/bin/python" ]] \
        && "${LIGHTPANDA_HOME}/venv/bin/python" -c 'import playwright' 2>/dev/null; then

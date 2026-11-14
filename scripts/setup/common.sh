@@ -258,6 +258,7 @@ seed_tool_wiring(){
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
     CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
   wire_tool lightpanda LIGHTPANDA_HOME LIGHTPANDA_BIN -- "$XDG_BIN_HOME"
+  wire_tool tor TOR_HOME TOR_BIN_DIR -- "$XDG_BIN_HOME"
   wire_tool hermes-chromium HERMES_CHROME_STATE -- "$XDG_BIN_HOME"
   # Kept in sync with install_hermes_chromium: a --fix run with no staged chrome
   # never calls the installer, so the export has to be re-derived here or the rc
@@ -290,6 +291,7 @@ WF=false # --workflow: workflow mode (stream logs to the terminal, keep the job 
 INSTALL_CAMOFOX=false
 INSTALL_LIGHTPANDA=false
 INSTALL_MOLI=false
+INSTALL_TOR=false
 INSTALL_HERMES_CHROMIUM=false
 INSTALL_LLM_WIKI=false
 INSTALL_ZSH=false

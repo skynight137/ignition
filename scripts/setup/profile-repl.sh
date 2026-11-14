@@ -248,6 +248,7 @@ source "$SETUP_LIB_DIR/join-repl.sh"  # the repl join LANE (install_join); join.
 source "$SETUP_LIB_DIR/camofox.sh"
 source "$SETUP_LIB_DIR/lightpanda.sh"
 source "$SETUP_LIB_DIR/moli.sh"
+source "$SETUP_LIB_DIR/tor.sh"
 source "$SETUP_LIB_DIR/hermes_chromium.sh"
 source "$SETUP_LIB_DIR/llm-wiki.sh"
 source "$SETUP_LIB_DIR/cleanup.sh"
