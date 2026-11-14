@@ -21,6 +21,12 @@ re-parses, re-validates, and proves the dotted key set is unchanged
 outside the intended op — otherwise it restores the backup and fails.
 Backups land beside the file as FILE.bak-dtr-<epoch>.
 
+Fleet rule (2026-11-11, escalated from WARN): NOTHING may come after
+[userenv.shared] — a violating file can be rejected by pid2 into
+Recovery Mode. `check` fails it as a fleet-rule violation, and every
+mutating op refuses to write such a file at all (no edit, no backup);
+move [userenv.shared] last by hand first.
+
 Exit codes: 0 ok · 2 schema violation · 3 fleet-rule violation ·
 4 parse failure · 5 edit/verify failure.
 Stdlib only.
@@ -93,6 +99,19 @@ def schema_errors(doc):
     return errs
 
 
+def sections_after_userenv(text):
+    """Section headers listed after [userenv.shared] in file order, or [].
+
+    Fleet rule (2026-11-11): NOTHING may come after [userenv.shared] — a
+    violating file can be rejected by pid2 into Recovery Mode (repl-30
+    died this way). Detection is shared by fleet_errors() and the
+    guarded_edit() write gate so both judge the same thing."""
+    heads = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("[")]
+    if "[userenv.shared]" in heads:
+        return heads[heads.index("[userenv.shared]") + 1:]
+    return []
+
+
 def fleet_errors(doc, text, role, template=False):
     errs, warns = [], []
     for i, p in enumerate(doc.get("ports", [])):
@@ -107,13 +126,12 @@ def fleet_errors(doc, text, role, template=False):
                 errs.append(f"[userenv.shared] missing {k} (fleet-vars rule)")
             elif not ue[k] and not template:
                 errs.append(f"[userenv.shared] {k} is empty on a configured box")
-    heads = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("[")]
-    if "[userenv.shared]" in heads:
-        after = heads[heads.index("[userenv.shared]") + 1:]
-        if after:
-            warns.append(f"sections after [userenv.shared]: {after} "
-                         "(fleet convention: userenv.shared last; platform "
-                         "serializers may differ — warning only)")
+    after = sections_after_userenv(text)
+    if after:
+        errs.append(f"sections after [userenv.shared]: {after} "
+                    "(fleet rule: NOTHING may come after [userenv.shared]; "
+                    "a violating file can be rejected by pid2 into Recovery "
+                    "Mode — move [userenv.shared] last before any edit)")
     for w in doc.get("workflows", {}).get("workflow", []):
         if w.get("name") == "launch-camofox":
             for t in w.get("tasks", []):
@@ -154,6 +172,17 @@ def toml_str(v):
 
 def guarded_edit(path, mutate, intended_removed_prefixes=()):
     text = open(path).read()
+    # Fleet-rule gate: a file with sections after [userenv.shared] is
+    # refused outright — no edit, no backup, no write. Writing to it
+    # risks pid2 rejecting the file into Recovery Mode, and no op here
+    # can fix the section order (move [userenv.shared] last by hand).
+    after = sections_after_userenv(text)
+    if after:
+        print(f"ERROR: refusing to edit {path}: sections after "
+              f"[userenv.shared]: {after} (fleet rule: NOTHING may come "
+              "after [userenv.shared]; move it last before any edit)",
+              file=sys.stderr)
+        return 3
     before = load(path)
     before_keys = keyset(before)
     lines = text.splitlines(keepends=True)
