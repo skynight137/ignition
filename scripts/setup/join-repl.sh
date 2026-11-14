@@ -246,6 +246,17 @@ RCEOF
     ok "beacon: loop stats node dimulai (atau sudah jalan)"
   fi
 
+  # Beacon watchdog (supervisor for the beacon loop): the loop dies
+  # silently on a hard kill (stale pidfile, no error line) and can stall
+  # inside a hung post while staying alive — the watchdog restarts it
+  # when it is dead or when it stops posting. Same best-effort contract
+  # as the beacon: dedup by pidfile, never fails the join.
+  local beacon_watchdog="$RS_SKILL_ROOT/../replit/beacon-watchdog.sh"
+  if [ -f "$beacon_watchdog" ]; then
+    ( setsid nohup bash "$beacon_watchdog" >/dev/null 2>&1 </dev/null & ) || true
+    ok "beacon: watchdog loop dimulai (atau sudah jalan)"
+  fi
+
   # Camofox crash-report shim (design: heavenly-host
   # docs/camofox-collector-investigation.md): a supervisor loop keeping
   # the loopback receiver alive. The camofox server POSTs its
