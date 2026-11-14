@@ -43,6 +43,7 @@ main() {
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
       && ! $INSTALL_CAMOFOX && ! $INSTALL_LIGHTPANDA && ! $INSTALL_MOLI && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
+      && ! $INSTALL_TOR \
       && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN; then
       die "No tools selected. Aborting."
     fi
@@ -135,6 +136,7 @@ main() {
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_LIGHTPANDA && run_install_step lightpanda       install_lightpanda
   $INSTALL_MOLI && run_install_step moli               install_moli
+  $INSTALL_TOR && run_install_step tor                install_tor
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
   # llm-wiki's server half is plain Node: on a fresh box without node the install used to
   # finish and then run-public.sh died with "node is required". Install it here instead.
@@ -180,6 +182,7 @@ main() {
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
    camofox-browser  lightpanda  moli (version subcommands)
+   tor  tor-browser (Tor daemon + CDP driver — browse via Tor)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -200,6 +203,7 @@ SUMMARY
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
    camofox-browser  lightpanda  moli (version subcommands)
+   tor  tor-browser (Tor daemon + CDP driver — browse via Tor)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi

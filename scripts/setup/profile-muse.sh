@@ -41,6 +41,10 @@
 #   bash setup.sh --sshd              sshd stack only (users, openssh, keys,
 #                                     configs)
 #   bash setup.sh --tailscale         tailscale binaries only
+#   bash setup.sh --tor               Tor browser (expert bundle + CDP driver:
+#                                     daemon SOCKS 127.0.0.1:9050, tor-browser
+#                                     drives headless Chromium through it;
+#                                     no keeper — the daemon starts on demand)
 #   bash setup.sh -j | --join         start the stack and join the tailnet
 #                                     (implies --sshd/--tailscale when their
 #                                     outputs are missing)
@@ -76,6 +80,7 @@ set -euo pipefail
 PEER="${RS_PEER:-}" VERIFY=0
 SSH_USER="${RS_SSH_USER:-root}"
 DO_SSHD=0 DO_TAILSCALE=0 DO_JOIN=0 DO_MENU=0 SELECTED=0
+DO_TOR=0
 DO_START_SSHD=0 DO_START_TS=0 DO_LOOP=0 DO_CHECK_REVERSE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -84,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     --verify) VERIFY=1; shift ;;
     --sshd) DO_SSHD=1; SELECTED=1; shift ;;
     --tailscale) DO_TAILSCALE=1; SELECTED=1; shift ;;
+    --tor) DO_TOR=1; SELECTED=1; shift ;;
     -j|--join) DO_JOIN=1; SELECTED=1; shift ;;
     --menu) DO_MENU=1; shift ;;
     --start-sshd) DO_START_SSHD=1; SELECTED=1; shift ;;
@@ -105,6 +111,11 @@ if [[ -f "$_SETUP_DIR/core.sh" ]]; then
 else
   echo "setup: missing shared library $_SETUP_DIR/core.sh — run from a full clone of skynight137/skills" >&2
   exit 2
+fi
+# Tor browser lane (dual-profile module — core.sh helpers only, so it loads
+# here too). Sourced unconditionally; --tor calls install_tor.
+if [[ -f "$_SETUP_DIR/tor.sh" ]]; then
+  source "$_SETUP_DIR/tor.sh"
 fi
 unset _SETUP_DIR
 WS="$HOME/workspace"
@@ -957,4 +968,7 @@ if [[ $DO_JOIN -eq 1 ]]; then
 fi
 [[ $DO_SSHD -eq 1 ]] && phase_sshd
 [[ $DO_TAILSCALE -eq 1 ]] && phase_tailscale
+# Tor is independent of the join stack (no sshd/tailscale dependency) —
+# install_tor is the dual-profile lane function in scripts/setup/tor.sh.
+[[ $DO_TOR -eq 1 ]] && install_tor
 [[ $DO_JOIN -eq 1 ]] && phase_join

@@ -102,6 +102,8 @@ jobs:
               - 'scripts/setup/camofox.sh'
             moli:
               - 'scripts/setup/moli.sh'
+            tor:
+              - 'scripts/setup/tor.sh'
             lightpanda:
               - 'scripts/setup/lightpanda.sh'
             llmwiki:
@@ -145,6 +147,7 @@ jobs:
             lane llm-wiki --llm-wiki "llm-wiki:" ubuntu-latest
             lane camofox --camofox "Camofox:" ubuntu-latest
             lane moli --moli "Moli:" ubuntu-latest
+            lane tor --tor "Tor:" ubuntu-latest
             lane android --android-tools "Android SDK (adb):" ubuntu-latest
             lane java --java "Java:" ubuntu-latest
             lane uv --uv "uv:" macos-latest
@@ -184,6 +187,9 @@ jobs:
             fi
             if [ "${{ steps.filter.outputs.moli }}" = "true" ]; then
               lane moli --moli "Moli:" ubuntu-latest
+            fi
+            if [ "${{ steps.filter.outputs.tor }}" = "true" ]; then
+              lane tor --tor "Tor:" ubuntu-latest
             fi
             if [ "${{ steps.filter.outputs.lightpanda }}" = "true" ]; then
               lane lightpanda --lightpanda "Lightpanda:" ubuntu-latest

@@ -104,6 +104,7 @@ back_up_tool() {
     camofox) : ;;  # ~/.camofox server state is preserved by clean_camofox
     lightpanda) : ;;  # tour config + cookie jar are preserved by clean_lightpanda
     moli) : ;;  # tour config + cookie jar are preserved by clean_moli
+    tor) : ;;  # DataDirectory + .env.example are preserved by clean_tor
     hermes-chromium) : ;;  # the browser itself is Hermes-managed; clean_ drops only the closure
     *)       : ;;  # nothing user-owned (binary-only tools)
   esac
@@ -125,6 +126,7 @@ clean_paths_for() {
     camofox)       echo "npm package, $CAMOUFOX_INSTALL_DIR engine, closure (server state PRESERVED)" ;;
     lightpanda)    echo "$LIGHTPANDA_BIN binary + tour venv (config + cookie jar PRESERVED)" ;;
     moli)          echo "$MOLI_BIN binary + launcher (config + cookie jar PRESERVED)" ;;
+    tor)           echo "$TOR_HOME/bundle + $TOR_BIN_DIR/{tor,tor-browser} (DataDirectory + .env.example PRESERVED)" ;;
     hermes-chromium) echo "$HERMES_CHROME_STATE closure + launch-hermes-chrome launcher (the browser itself is Hermes-managed; untouched)" ;;
     rclone)        echo "$XDG_BIN_HOME/rclone" ;;
     qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
@@ -580,7 +582,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|tor|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -597,7 +599,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|tor|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -643,11 +645,12 @@ clean() {
       clean_camofox
       clean_lightpanda
       clean_moli
+      clean_tor
       clean_hermes_chromium
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|java|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|moli|tor|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST, then remove
       # the binaries + payload. Labels here differ from
       # wire_tool ownership labels: android-tools -> android, oc -> opencode.
@@ -681,6 +684,7 @@ clean() {
         camofox)       clean_camofox ;;
         lightpanda)    clean_lightpanda ;;
         moli)          clean_moli ;;
+        tor)           clean_tor ;;
         llm-wiki)      clean_llm_wiki ;;
         hermes-chromium) clean_hermes_chromium ;;
         rclone)        clean_rclone ;;
@@ -722,6 +726,7 @@ clean() {
           camofox)  clean_camofox ;;
           lightpanda) clean_lightpanda ;;
           moli) clean_moli ;;
+          tor) clean_tor ;;
           hermes-chromium) clean_hermes_chromium ;;
           zsh)      clean_zsh ;;
           llm-wiki) clean_llm_wiki ;;

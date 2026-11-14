@@ -65,6 +65,15 @@ Options:
                         (~380 MB per stop, zero idle). Not part of --all;
                         install it explicitly where a fleet tour runs.
                         See references/lightpanda.md
+  -t,  --tor                Install Tor browser (expert bundle $TOR_BROWSER_VERSION,
+                        tor $TOR_VERSION, SHA256-verified) + the headless
+                        Chromium-over-CDP driver: the daemon is a userspace
+                        SOCKS5 proxy (127.0.0.1:9050), tor-browser drives
+                        Chromium through it and proves Tor egress via
+                        check.torproject.org. No keeper — the daemon starts
+                        on demand (tor-browser), never at install. Not part
+                        of --all; install it explicitly where Tor egress
+                        is needed (a Muse VM cannot run a VPN tunnel).
   -lw, --llm-wiki           Install the llm-wiki server (knowledge base for agents):
                         scripts/setup/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
                         AppImage + shared token (.env, chmod 600). Start with
@@ -171,6 +180,7 @@ parse_args() {
       -cm|--camofox)             INSTALL_CAMOFOX=true ;;
       -lp|--lightpanda)          INSTALL_LIGHTPANDA=true ;;
       -mo|--moli)                INSTALL_MOLI=true ;;
+      -t|--tor)                  INSTALL_TOR=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       -lw|--llm-wiki)            INSTALL_LLM_WIKI=true ;;
       -d|--doctor)               DOCTOR=true ;;
@@ -218,6 +228,7 @@ parse_args() {
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
      && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN \
      && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI && ! $INSTALL_LIGHTPANDA && ! $INSTALL_MOLI \
+     && ! $INSTALL_TOR \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
