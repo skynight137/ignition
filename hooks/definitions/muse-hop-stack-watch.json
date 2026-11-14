@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "muse-hop-stack-watch",
+  "enabled": true,
+  "script_path": "~/hooks/scripts/muse-hop-stack-watch.sh",
+  "prompt": "A stack-health watchdog poll found FAIL lines on muse-hop (the wake payload lists them). Act as the join-stack restorer, mirroring the muse-hop-self-heal job's rules:\n\n1. Re-run `bash ~/workspace/tests/stack-health.sh`. If all five probes PASS now, do nothing and do not message the user — it was transient.\n2. If any probe still FAILs, run `bash ~/skynight137/ignition/scripts/setup.sh --machine muse --user runner --tailscale --join` in the foreground, then re-run stack-health.\n3. Report to the user in one short message ONLY if you restored something or something still fails: say what was down and whether it healed (report the node address the probe actually prints), or include the still-failing probe lines. Use informal Indonesian, matching the main chat.\n4. Never report repl-hop's absence — that is peer-side and the reverse loop retries on its own.\n5. Do NOT touch Termix or fm.js from this wake — Termix restore after a redeploy is handled in the main chat (its forwarders are intentionally off), and fm stays down unless the user asks.",
+  "poll_interval_secs": 90,
+  "script_timeout_secs": 600,
+  "delivery": {
+    "surface": "main"
+  },
+  "presentation_locale": "en-US",
+  "created_at_ms": 1793803495526,
+  "updated_at_ms": 1794420178355
+}
