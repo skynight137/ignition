@@ -257,6 +257,18 @@ RCEOF
     ok "beacon: watchdog loop dimulai (atau sudah jalan)"
   fi
 
+  # MCP server (remote execution over the tailnet): a supervisor loop
+  # keeping the per-node MCP server alive. The server has no keeper of
+  # its own — a workspace sleep or kill leaves it down until someone
+  # restarts it by hand — so the watchdog restarts it when its process
+  # is dead or its /health stops answering. Same best-effort contract
+  # as the beacon: dedup by pidfile, never fails the join.
+  local mcp_watchdog="$RS_SKILL_ROOT/../replit/mcp-watchdog.sh"
+  if [ -f "$mcp_watchdog" ]; then
+    ( setsid nohup bash "$mcp_watchdog" >/dev/null 2>&1 </dev/null & ) || true
+    ok "mcp: watchdog loop dimulai (atau sudah jalan)"
+  fi
+
   # Camofox crash-report shim (design: heavenly-host
   # docs/camofox-collector-investigation.md): a supervisor loop keeping
   # the loopback receiver alive. The camofox server POSTs its
