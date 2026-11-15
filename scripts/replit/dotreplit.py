@@ -531,11 +531,21 @@ def op_del_workflow(path, workflow):
 
     def mutate(lines):
         name_re = re.compile(rf'^\s*name\s*=\s*"{re.escape(workflow)}"')
+        sub_re = re.compile(r'^\s*\[+workflows\.workflow\.')
         all_spans = list(spans(lines))
         blocks = [(s, e) for h, s, e in all_spans
                   if h and h.startswith("[[workflows.workflow]]")]
         for n, (s, e) in enumerate(blocks):
-            extent_end = blocks[n + 1][0] if n + 1 < len(blocks) else len(lines)
+            # Block extent: to the next header that is not a subsection
+            # (tasks/metadata) of this workflow. The old code used the
+            # next workflow block or EOF, which for the LAST workflow
+            # swallowed every section after it (ports, userenv) and
+            # tripped the guarded-edit verifier.
+            extent_end = len(lines)
+            for i in range(s + 1, len(lines)):
+                if HEADER_RE.match(lines[i]) and not sub_re.match(lines[i]):
+                    extent_end = i
+                    break
             sub = next((i for i in range(s + 1, extent_end)
                         if HEADER_RE.match(lines[i])), extent_end)
             if any(name_re.match(lines[i]) for i in range(s + 1, sub)):
