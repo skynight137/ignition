@@ -249,6 +249,10 @@ jobs:
             < <(find scripts tests -name '*.sh' -type f)
           exit $fail
 
+      - name: Node syntax (mcp server)
+        shell: bash
+        run: node --check scripts/replit/mcp-server.mjs
+
       - name: Python compile (cache outside the tree)
         shell: bash
         env:
