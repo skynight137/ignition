@@ -15,6 +15,9 @@ edits:
   set-waitforport FILE WORKFLOW PORT             one workflow task's port
   add-port FILE PORT | del-port FILE PORT        identity [[ports]] pair
   add-workflow FILE SNIPPET.toml                 append one workflow block
+  add-task FILE WORKFLOW TASK ARGS               append one task to a workflow
+  del-task FILE WORKFLOW TASK [ARGS]             remove one task from a workflow
+  del-workflow FILE WORKFLOW                     remove one whole workflow block
 
 Every mutating op: parses first, edits only the target section's span,
 re-parses, re-validates, and proves the dotted key set is unchanged
@@ -411,6 +414,139 @@ def op_add_workflow(path, snippet_path):
     return guarded_edit(path, mutate)
 
 
+def op_add_task(path, workflow, task, args):
+    """Append one [[workflows.workflow.tasks]] block to a named workflow.
+
+    Inserted after that workflow's last task block (before its
+    [workflows.workflow.metadata] subsection when present), so the new
+    task runs as part of the workflow. Idempotent: a task with the same
+    task + args already present is a no-op. Used to wire a standalone
+    workflow (e.g. vless) into Project so it auto-starts on boot."""
+    doc = load(path)
+    target = None
+    for w in doc.get("workflows", {}).get("workflow", []):
+        if w.get("name") == workflow:
+            target = w
+            break
+    if target is None:
+        print(f"workflow {workflow!r} not found", file=sys.stderr)
+        return 5
+    for t in target.get("tasks", []):
+        if t.get("task") == task and t.get("args") == args:
+            print(f"task {task!r} args {args!r} already in workflow {workflow!r}")
+            return 0
+    block = (f"[[workflows.workflow.tasks]]\n"
+             f"task = {toml_str(task)}\n"
+             f"args = {toml_str(args)}\n\n")
+
+    def mutate(lines):
+        name_re = re.compile(rf'^\s*name\s*=\s*"{re.escape(workflow)}"')
+        all_spans = list(spans(lines))
+        blocks = [(s, e) for h, s, e in all_spans
+                  if h and h.startswith("[[workflows.workflow]]")]
+        for n, (s, e) in enumerate(blocks):
+            extent_end = blocks[n + 1][0] if n + 1 < len(blocks) else len(lines)
+            sub = next((i for i in range(s + 1, extent_end)
+                        if HEADER_RE.match(lines[i])), extent_end)
+            if not any(name_re.match(lines[i]) for i in range(s + 1, sub)):
+                continue
+            task_spans = [(s2, e2) for h2, s2, e2 in all_spans
+                          if h2 == "[[workflows.workflow.tasks]]"
+                          and s2 > s and s2 < extent_end]
+            insert_at = task_spans[-1][1] if task_spans else sub
+            lines[insert_at:insert_at] = [block]
+            return lines
+        return None
+    return guarded_edit(path, mutate)
+
+
+def op_del_task(path, workflow, task, args=None):
+    """Remove one [[workflows.workflow.tasks]] block from a named workflow.
+
+    Matches by task name (and args when given, compared as TOML strings).
+    Idempotent: a task that is not present is a no-op. Used to unwire a
+    standalone workflow (e.g. vless) from Project so it no longer
+    auto-starts on boot."""
+    doc = load(path)
+    wi = None
+    target = None
+    for i, w in enumerate(doc.get("workflows", {}).get("workflow", [])):
+        if w.get("name") == workflow:
+            wi, target = i, w
+            break
+    if target is None:
+        print(f"workflow {workflow!r} not found", file=sys.stderr)
+        return 5
+    tasks = target.get("tasks", [])
+    found = any(t.get("task") == task
+                and (args is None or t.get("args") == args)
+                for t in tasks)
+    if not found:
+        print(f"task {task!r} not in workflow {workflow!r} (no-op)")
+        return 0
+    last = len(tasks) - 1
+    args_line = ("args = " + toml_str(args)) if args is not None else None
+
+    def mutate(lines):
+        name_re = re.compile(rf'^\s*name\s*=\s*"{re.escape(workflow)}"')
+        task_re = re.compile(rf'^\s*task\s*=\s*"{re.escape(task)}"',
+                             re.MULTILINE)
+        all_spans = list(spans(lines))
+        blocks = [(s, e) for h, s, e in all_spans
+                  if h and h.startswith("[[workflows.workflow]]")]
+        for n, (s, e) in enumerate(blocks):
+            extent_end = blocks[n + 1][0] if n + 1 < len(blocks) else len(lines)
+            sub = next((i for i in range(s + 1, extent_end)
+                        if HEADER_RE.match(lines[i])), extent_end)
+            if not any(name_re.match(lines[i]) for i in range(s + 1, sub)):
+                continue
+            task_spans = [(s2, e2) for h2, s2, e2 in all_spans
+                          if h2 == "[[workflows.workflow.tasks]]"
+                          and s2 > s and s2 < extent_end]
+            for (s2, e2) in task_spans:
+                body = "".join(lines[s2:e2])
+                if task_re.search(body) and (
+                        args_line is None or args_line in body):
+                    del lines[s2:e2]
+                    return lines
+            return None
+        return None
+    return guarded_edit(
+        path, mutate,
+        intended_removed_prefixes=(f"workflows.workflow[{wi}].tasks[{last}]",))
+
+
+def op_del_workflow(path, workflow):
+    """Remove one whole [[workflows.workflow]] block by name, including
+    its tasks and metadata subsections.
+
+    Idempotent: a workflow that is not present is a no-op. Used to drop
+    a dead standalone workflow (e.g. vless) entirely."""
+    doc = load(path)
+    workflows = doc.get("workflows", {}).get("workflow", [])
+    if not any(w.get("name") == workflow for w in workflows):
+        print(f"workflow {workflow!r} not found (no-op)")
+        return 0
+    last = len(workflows) - 1
+
+    def mutate(lines):
+        name_re = re.compile(rf'^\s*name\s*=\s*"{re.escape(workflow)}"')
+        all_spans = list(spans(lines))
+        blocks = [(s, e) for h, s, e in all_spans
+                  if h and h.startswith("[[workflows.workflow]]")]
+        for n, (s, e) in enumerate(blocks):
+            extent_end = blocks[n + 1][0] if n + 1 < len(blocks) else len(lines)
+            sub = next((i for i in range(s + 1, extent_end)
+                        if HEADER_RE.match(lines[i])), extent_end)
+            if any(name_re.match(lines[i]) for i in range(s + 1, sub)):
+                del lines[s:extent_end]
+                return lines
+        return None
+    return guarded_edit(
+        path, mutate,
+        intended_removed_prefixes=(f"workflows.workflow[{last}]",))
+
+
 # ---------- main ----------
 
 def main(argv):
@@ -435,6 +571,13 @@ def main(argv):
         return op_add_port(path, argv[3])
     if cmd == "add-workflow":
         return op_add_workflow(path, argv[3])
+    if cmd == "add-task":
+        return op_add_task(path, argv[3], argv[4], argv[5])
+    if cmd == "del-task":
+        return op_del_task(path, argv[3], argv[4],
+                           argv[5] if len(argv) > 5 else None)
+    if cmd == "del-workflow":
+        return op_del_workflow(path, argv[3])
     if cmd == "del-port":
         return op_del_port(path, argv[3])
     print(f"unknown command {cmd!r}", file=sys.stderr)
