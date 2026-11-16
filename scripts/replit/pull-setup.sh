@@ -1,57 +1,48 @@
 #!/usr/bin/env bash
-# pull-setup.sh — robust ignition update for Replit nodes.
-# Replaces the old one-liner `git pull --ff-only`, which aborts whenever
-# the tree is dirty (local edits) or an untracked file would be
-# overwritten. This version NEVER deletes local work: anything that
-# would block the update is copied to a timestamped backup dir first,
-# then the tree is made clean and pulled. The backup is reported so the
-# owner can review / re-apply it (the correct route is a PR to the
-# ignition repo, not a local edit on a node).
-#
+# pull-setup.sh — robust ignition update via clone-move (NO pull in WS).
+# The old `git pull --ff-only` aborted whenever the tree was dirty
+# (local edits) or an untracked file would be overwritten — and even the
+# backup-and-pull variant still runs a merge in the live workspace.
+# This version never pulls in the live dir at all:
+#   1. fresh clone to /tmp, verify HEAD
+#   2. preserve local work: untracked files that the repo does NOT
+#      provide are copied into the fresh clone; the whole old dir is
+#      moved aside to a timestamped backup (nothing deleted)
+#   3. move the fresh clone into place
 # Usage: bash ignition/scripts/replit/pull-setup.sh
-#   (also safe to run directly on a node for testing)
 set -u
 U="https://github.com/skynight137/ignition.git"
 D="$HOME/workspace/ignition"
+TMP="/tmp/ignition-new-$$"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] pull-setup: $*"; }
 
-if [ ! -d "$D/.git" ]; then
-  log "no repo, cloning"
-  git clone "$U" "$D" || { log "FAIL clone"; exit 1; }
-  log "cloned HEAD $(git -C "$D" rev-parse --short HEAD)"
-  exit 0
+# 1. Fresh clone to /tmp
+git clone "$U" "$TMP" || { log "FAIL clone"; exit 1; }
+NEW_HEAD=$(git -C "$TMP" rev-parse --short HEAD)
+log "cloned HEAD $NEW_HEAD"
+
+# 2. Preserve local work from the live dir (if it exists)
+BAK=""
+if [ -d "$D" ]; then
+  OLD_HEAD=$(git -C "$D" rev-parse --short HEAD 2>/dev/null || echo "none")
+  BAK="$HOME/workspace/ignition-backup-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$BAK"
+  # Untracked local files the repo does NOT provide -> copy into the
+  # fresh clone so local state (e.g. a node .env) survives the swap.
+  # Files the repo now provides are skipped (repo version wins).
+  git -C "$D" status --porcelain | awk '$1 == "??" {print $2}' | while read -r f; do
+    [ -n "$f" ] || continue
+    if [ ! -e "$TMP/$f" ]; then
+      mkdir -p "$TMP/$(dirname "$f")"
+      cp "$D/$f" "$TMP/$f" 2>/dev/null && log "kept local untracked $f"
+    fi
+  done
+  # Whole old dir aside (preserves modified tracked files + .git).
+  mv "$D" "$BAK/ignition-old-$OLD_HEAD"
+  log "old dir -> $BAK/ignition-old-$OLD_HEAD (was $OLD_HEAD)"
 fi
 
-git -C "$D" remote set-url origin "$U"
-git -C "$D" fetch origin || { log "FAIL fetch"; exit 1; }
-
-BAK="$HOME/workspace/ignition-backup-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BAK"
-BACKED_UP=0
-
-# 1. Modified tracked files: back up, then restore to HEAD.
-git -C "$D" status --porcelain | awk '$1 ~ /^[MADRC]/ {print $2}' | while read -r f; do
-  [ -n "$f" ] || continue
-  mkdir -p "$BAK/$(dirname "$f")"
-  cp "$D/$f" "$BAK/$f" 2>/dev/null && log "backed up modified $f -> $BAK/$f"
-  git -C "$D" checkout -- "$f"
-done
-
-# 2. Untracked files that origin/main would overwrite: back up, then remove.
-git -C "$D" ls-tree -r --name-only origin/main | while read -r f; do
-  [ -n "$f" ] || continue
-  if [ -e "$D/$f" ] && ! git -C "$D" ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-    mkdir -p "$BAK/$(dirname "$f")"
-    cp "$D/$f" "$BAK/$f" 2>/dev/null && log "backed up untracked $f -> $BAK/$f"
-    rm "$D/$f"
-  fi
-done
-
-# 3. Tree is clean now; pull.
-if git -C "$D" pull --ff-only; then
-  log "OK HEAD $(git -C "$D" rev-parse --short HEAD) backup=$BAK"
-else
-  log "FAIL pull (backup kept at $BAK)"
-  exit 1
-fi
+# 3. Move fresh clone into place
+mv "$TMP" "$D"
+log "OK HEAD $NEW_HEAD backup=$BAK"
