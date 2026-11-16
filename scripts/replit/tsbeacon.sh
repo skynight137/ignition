@@ -41,14 +41,16 @@ TS=$(date '+%Y-%m-%dT%H:%M:%S%z')
 UP=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
 # Bracket pattern: never self-match this script's own cmdline.
 if pgrep -f '[t]our.py' >/dev/null 2>&1; then TOUR=true; else TOUR=false; fi
-CF=$(curl -s --max-time 4 http://127.0.0.1:9377/health 2>/dev/null | grep -c '"ok":true' || true)
-[ "${CF:-0}" -ge 1 ] && CFOK=true || CFOK=false
+if curl -s --max-time 4 http://127.0.0.1:9377/health 2>/dev/null | grep -q '"ok":true'; then CFOK=true; else CFOK=false; fi
 DISK=$(df --output=pcent "$WS" 2>/dev/null | tail -1 | tr -dc '0-9')
 IGNITION=$(git -C "$WS/ignition" rev-parse --short HEAD 2>/dev/null || echo unknown)
 # Workflow logs end lines with CR (Replit shell logs are CRLF); a raw CR
-# inside the JSON string is invalid JSON and the CC answers 400. Strip
-# it (and any other control byte) before the body is assembled.
-VERDICT=$(ls -t "$WS"/.local/state/workflow-logs/*/*.shell.exec.0 2>/dev/null | head -3 | xargs grep -h 'verdict=' 2>/dev/null | tail -1 | tr -d '\r' | tr -d '\000-\010\013\014\016-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | cut -c1-160)
+# (or tab, or any control byte) inside the JSON string is invalid JSON
+# and the CC answers 400. Strip ALL C0 controls (000-037: NUL, tab, LF,
+# CR, ...) before the body is assembled. `xargs -r`: never run grep with
+# no file args — without it, an empty logs dir makes grep read stdin
+# and the beacon hangs.
+VERDICT=$(ls -t "$WS"/.local/state/workflow-logs/*/*.shell.exec.0 2>/dev/null | head -3 | xargs -r grep -h 'verdict=' 2>/dev/null | tail -1 | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | cut -c1-160)
 
 # Backlog: complete lines only, newest first, capped. A byte cap (head -c)
 # can cut a JSON line mid-string, and the truncated fragment then poisons
@@ -76,7 +78,7 @@ build_body() {
 # makes tailscale nc tear the session down before the reply returns
 # (see tsfetch.sh). HTTP/1.0: the server closes after answering.
 post_body() {
-  _pb_len=$(printf '%s' "$1" | wc -c)
+  _pb_len=$(printf '%s' "$1" | wc -c | tr -d ' ')  # wc -c pads with spaces; Content-Length must be bare digits
   (printf 'POST /beacon/%s HTTP/1.0\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n%s' "$NODE" "$HOST" "$_pb_len" "$1"; sleep 5) \
     | timeout 30 "$TS_BIN" --socket="$TS_SOCK" nc "$HOST" "$PORT" 2>/dev/null | head -1
 }
