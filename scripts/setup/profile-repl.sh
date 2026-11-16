@@ -64,16 +64,16 @@ JAVA_TOOL_OPTS_VALUE="-XX:-UsePerfData --enable-native-access=ALL-UNNAMED"
 # uv: pinned release, installed from the versioned GitHub tarball
 # (astral-sh/uv) with its published .sha256 sidecar — no installer
 # script, so the version on the box is the version recorded here.
-UV_VERSION="0.13.7"
+UV_VERSION="0.13.8"
 
 # AI coding (direct binary downloads — no curl|bash installers)
 OPENCODE_REPO="anomalyco/opencode"
 OPENCODE_VERSION="1.19.5"
 CLAUDE_RELEASE_BASE="https://downloads.claude.ai/claude-code-releases"
-CLAUDE_VERSION="2.1.319"
+CLAUDE_VERSION="2.1.325"
 # ORI tags its CLI releases cli-<version>-<commit>; the tag is the
 # release path segment, so ORI_VERSION carries the whole tag.
-ORI_VERSION="cli-0.16.3-f483c10"
+ORI_VERSION="cli-0.17.0-31fbdff"
 ORI_RELEASE_BASE="https://github.com/OpenRouterLabs/ori-releases/releases/download"
 
 # Download / media tools (direct binaries — no curl|bash, no installers)
@@ -98,8 +98,8 @@ ARIA2_RELEASE_BASE="https://github.com/abcfy2/aria2-static-build/releases/downlo
 # dated autobuild release (immutable) whose assets are named by the
 # exact master commit they were built from; its checksums.sha256 is
 # verified by the lane.
-FFMPEG_VERSION="N-128691-gcc583787bb"
-FFMPEG_RELEASE_TAG="autobuild-2026-11-08-12-35"
+FFMPEG_VERSION="N-128915-g3d16b774d7"
+FFMPEG_RELEASE_TAG="autobuild-2026-11-15-12-40"
 FFMPEG_RELEASE_BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download"
 
 # Remote access (direct binaries — see references/exposing-ports.md)
@@ -108,13 +108,13 @@ FFMPEG_RELEASE_BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download"
 # the .deb/.rpm packages), so scripts/setup/expose.sh carries size +
 # SHA256 pins computed from the official downloads; they move with
 # this version.
-CLOUDFLARED_VERSION="2026.10.7"
+CLOUDFLARED_VERSION="2026.11.0"
 CLOUDFLARED_RELEASE_BASE="https://github.com/cloudflare/cloudflared/releases/download"
 # tailscale: official stable channel, pinned version (the muse
 # profile pins its own copy as TSVER in profile-muse.sh). The
 # tarball name embeds the version, and each archive has a
 # `<tarball>.sha256` next to it (verified).
-TAILSCALE_VERSION="1.104.5"
+TAILSCALE_VERSION="1.104.7"
 TAILSCALE_PKGS_BASE="https://pkgs.tailscale.com/stable"
 # sshx: collaborative web terminal. Its GitHub releases carry NO assets at all
 # (checked: v0.4.1 has none); the canonical artifact is the versionless S3
@@ -125,17 +125,17 @@ SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
 # tours. Pinned release — the release publishes NO checksum asset, so
 # scripts/setup/lightpanda.sh carries the per-arch size + SHA256 pins computed
 # from the official downloads; they move with this version.
-LIGHTPANDA_VERSION="1.0.3"
+LIGHTPANDA_VERSION="1.0.4"
 LIGHTPANDA_RELEASE_BASE="https://github.com/lightpanda-io/browser/releases/download"
 # The tour client's playwright pin — the version proven against
 # Lightpanda 1.0.3's CDP in the fleet trial (references/lightpanda.md).
-LIGHTPANDA_PLAYWRIGHT_VERSION="1.64.1"
-MOLI_VERSION="1.1.22"
+LIGHTPANDA_PLAYWRIGHT_VERSION="1.65.1"
+MOLI_VERSION="1.1.25"
 MOLI_RELEASE_BASE="https://github.com/lexmount/moli/releases/download"
 # Camofox: the npm package is pinned — a bare `npm install -g` would
 # float to latest on every re-run and silently move the browser (and
 # the engine camoufox-js fetches for it) under a running fleet.
-CAMOFOX_VERSION="1.18.1"
+CAMOFOX_VERSION="1.19.0"
 
 # AI agent
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
