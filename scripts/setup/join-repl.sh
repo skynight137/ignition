@@ -257,6 +257,17 @@ RCEOF
     ok "beacon: watchdog loop dimulai (atau sudah jalan)"
   fi
 
+  # Exec runner (fetch-at-destination exec): a poll loop that watches
+  # the payload-store queue manifest for this node, fetches new
+  # payloads (sha-verified), executes them, and POSTs the result back.
+  # Execution never transits agent tools. Same best-effort contract
+  # as the beacon: dedup by pidfile, never fails the join.
+  local exec_runner="$RS_SKILL_ROOT/../replit/exec-runner.sh"
+  if [ -f "$exec_runner" ]; then
+    ( setsid nohup bash "$exec_runner" >/dev/null 2>&1 </dev/null & ) || true
+    ok "exec: runner loop dimulai (atau sudah jalan)"
+  fi
+
   # MCP server (remote execution over the tailnet): a supervisor loop
   # keeping the per-node MCP server alive. The server has no keeper of
   # its own — a workspace sleep or kill leaves it down until someone
