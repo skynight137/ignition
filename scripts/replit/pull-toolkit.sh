@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pull-setup.sh — robust ignition update via clone-move (NO pull in WS).
+# pull-toolkit.sh — robust toolkit update via clone-move (NO pull in WS).
 # The old `git pull --ff-only` aborted whenever the tree was dirty
 # (local edits) or an untracked file would be overwritten — and even the
 # backup-and-pull variant still runs a merge in the live workspace.
@@ -9,11 +9,11 @@
 #      provide are copied into the fresh clone; the whole old dir is
 #      moved aside to a timestamped backup (nothing deleted)
 #   3. move the fresh clone into place
-# Usage: bash ignition/scripts/replit/pull-setup.sh
+# Usage: bash ignition/scripts/replit/pull-toolkit.sh
 set -u
-U="https://github.com/skynight137/ignition.git"
+U="https://github.com/skynight137/toolkit.git"
 D="$HOME/workspace/ignition"
-TMP="/tmp/ignition-new-$$"
+TMP="/tmp/toolkit-new-$$"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] pull-setup: $*"; }
 
@@ -26,7 +26,7 @@ log "cloned HEAD $NEW_HEAD"
 BAK=""
 if [ -d "$D" ]; then
   OLD_HEAD=$(git -C "$D" rev-parse --short HEAD 2>/dev/null || echo "none")
-  BAK="$HOME/workspace/ignition-backup-$(date +%Y%m%d-%H%M%S)"
+  BAK="$HOME/workspace/toolkit-backup-$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BAK"
   # Untracked local files the repo does NOT provide -> copy into the
   # fresh clone so local state (e.g. a node .env) survives the swap.
@@ -39,8 +39,8 @@ if [ -d "$D" ]; then
     fi
   done
   # Whole old dir aside (preserves modified tracked files + .git).
-  mv "$D" "$BAK/ignition-old-$OLD_HEAD"
-  log "old dir -> $BAK/ignition-old-$OLD_HEAD (was $OLD_HEAD)"
+  mv "$D" "$BAK/toolkit-old-$OLD_HEAD"
+  log "old dir -> $BAK/toolkit-old-$OLD_HEAD (was $OLD_HEAD)"
 fi
 
 # 3. Move fresh clone into place
