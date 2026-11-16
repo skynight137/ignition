@@ -54,6 +54,14 @@ def load(path):
         return tomllib.load(fh)
 
 
+def _norm_idx(key):
+    # Normalize list indices so a deletion that shifts later items does
+    # not read as key loss (e.g. workflow[2].tasks[0].waitForPort moving
+    # to workflow[1] after an earlier workflow is deleted). A key is
+    # only lost if no equivalent exists at ANY index.
+    return re.sub(r"\[\d+\]", "[#]", key)
+
+
 def keyset(doc, prefix=""):
     out = set()
     if isinstance(doc, dict):
@@ -202,8 +210,11 @@ def guarded_edit(path, mutate, intended_removed_prefixes=()):
         errs = schema_errors(after)
         if errs:
             raise ValueError("schema: " + "; ".join(errs))
-        lost = {k for k in before_keys - keyset(after)
-                if not any(k == p or k.startswith(p + ".") or k.startswith(p + "[")
+        after_keys = keyset(after)
+        after_norm = {_norm_idx(k) for k in after_keys}
+        lost = {k for k in before_keys - after_keys
+                if _norm_idx(k) not in after_norm
+                and not any(k == p or k.startswith(p + ".") or k.startswith(p + "[")
                            for p in intended_removed_prefixes)}
         if lost:
             raise ValueError(f"key loss outside intended op: {sorted(lost)}")
