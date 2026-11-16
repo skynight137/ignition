@@ -46,7 +46,15 @@ mkdir -p "$STATE_DIR" "$RUNTIME_DIR/logs" "$(dirname "$LOG")"
 
 if [ -f "$WD_PIDFILE" ]; then
   old_pid="$(cat "$WD_PIDFILE" 2>/dev/null || true)"
-  if [ -n "${old_pid:-}" ] && kill -0 "$old_pid" 2>/dev/null; then
+  # A bare kill -0 is NOT enough: after a reboot the pidfile is stale and
+  # its pid is often recycled by another live process (tailscaled,
+  # beacon-watchdog, camofox-bin). kill -0 then succeeds and the watchdog
+  # exits silently believing another instance is running — while no
+  # watchdog (and no server) is alive at all. That killed MCP on 5 nodes
+  # (2026-11-16: repl-130/40/60/80/90). Verify the pid is actually this
+  # watchdog by its cmdline before trusting it.
+  if [ -n "${old_pid:-}" ] && [ -f "/proc/$old_pid/cmdline" ] \
+     && tr '\0' ' ' < "/proc/$old_pid/cmdline" 2>/dev/null | grep -q 'mcp-watchdog\.sh'; then
     exit 0
   fi
 fi
