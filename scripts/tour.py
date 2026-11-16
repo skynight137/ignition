@@ -136,7 +136,7 @@ source of every var is logged at startup, name + source only):
                       (fallback LP_COOKIES; default lightpanda:
                       $LIGHTPANDA_HOME/cookies.json, camofox:
                       $XDG_CONFIG_HOME/camofox/cookies.json)
-  TOUR_DWELL_S        seconds the tab is held per stop   (default 60)
+  TOUR_DWELL_S        seconds the tab is held per stop   (default 30)
   TOUR_GAP_S          sleep between stops, tab closed    (default 0)
   TOUR_POLL_S         budget for the shell marker        (default 150;
                       fallback LP_POLL_S)
@@ -898,7 +898,7 @@ _LOG_DIR_DEFAULT = (os.path.join(os.environ.get("REPL_HOME")
                                       "workspace", "logs"))
 LOG_DIR = cfg_chain(["TOUR_LOG_DIR", "LP_LOG_DIR"], _LOG_DIR_DEFAULT)
 
-DWELL = cfg_int("TOUR_DWELL_S", 60)
+DWELL = cfg_int("TOUR_DWELL_S", 30)
 GAP = cfg_int("TOUR_GAP_S", 0)
 BREAKER = cfg_int("TOUR_MAX_EARLY_FAILURES", 3)
 POLL = cfg_int_chain(["TOUR_POLL_S", "LP_POLL_S"], 150)
