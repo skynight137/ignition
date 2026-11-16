@@ -16,7 +16,12 @@
 # Usage: tsbeacon.sh [node-name]   (default: TAILSCALE_NODE_NAME from the
 #        box's .replit userenv, else hostname)
 # Env:   STORE_HOST (default muse-hop IP at authoring), STORE_PORT (8099),
-#        TS_BIN, TS_SOCK (fleet join defaults), BEACON_BUFFER.
+#        TS_BIN, TS_SOCK (fleet join defaults), BEACON_BUFFER,
+#        CF_BEACON_URL (default the live fleet-beacon Worker; empty = skip CF).
+# Dual-write: the same body is POSTed to BOTH the muse-hop payload-store
+# (primary: drives the fleet health watch, owns the backlog + exit code)
+# AND the Cloudflare Worker (secondary liveness sink, best-effort). A CF
+# failure is logged, never buffered and never changes the exit code.
 set -u
 
 WS="$HOME/workspace"
@@ -30,6 +35,7 @@ PORT="${STORE_PORT:-8099}"
 TS_BIN="${TS_BIN:-$WS/.local/bin/tailscale}"
 TS_SOCK="${TS_SOCK:-$WS/.local/state/tailscale/tailscaled.sock}"
 BUFFER="${BEACON_BUFFER:-$WS/.config/beacon/buffer.jsonl}"
+CF_BEACON_URL="${CF_BEACON_URL:-https://fleet-beacon.zode.workers.dev/beacon}"
 
 TS=$(date '+%Y-%m-%dT%H:%M:%S%z')
 UP=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
@@ -75,6 +81,22 @@ post_body() {
     | timeout 30 "$TS_BIN" --socket="$TS_SOCK" nc "$HOST" "$PORT" 2>/dev/null | head -1
 }
 
+# CF Worker second sink (Beacon-to-CF): same body, direct curl — nodes
+# have reliable egress to workers.dev. Best-effort only: always returns
+# 0, never buffers, never changes the exit code. Empty CF_BEACON_URL
+# disables it.
+post_cf() {
+  [ -n "$CF_BEACON_URL" ] || return 0
+  _cf_resp=$(printf '%s' "$1" | curl -s --max-time 10 -X POST \
+    -H 'Content-Type: application/json' --data-binary @- \
+    "$CF_BEACON_URL" 2>/dev/null || true)
+  case "$_cf_resp" in
+    *'"ok":true'*) echo "tsbeacon: $NODE cf ok" ;;
+    *) echo "tsbeacon: $NODE cf failed (resp: ${_cf_resp:-none})" >&2 ;;
+  esac
+  return 0
+}
+
 buffer_body() {
   mkdir -p "$(dirname "$BUFFER")"
   printf '%s\n' "$1" >> "$BUFFER"
@@ -85,6 +107,9 @@ BACKLOG=$(build_backlog)
 BODY=$(build_body "$BACKLOG")
 RESP=$(post_body "$BODY")
 
+# muse-hop outcome drives the backlog + exit code; the CF post runs
+# regardless and never changes it.
+MH_RC=0
 case "$RESP" in
   *" 200 "*)
     [ -s "$BUFFER" ] && : > "$BUFFER"
@@ -105,13 +130,16 @@ case "$RESP" in
         *)
           buffer_body "$BODY_NB"
           echo "tsbeacon: $NODE buffered (resp: ${RESP_NB:-none})" >&2
-          exit 1
+          MH_RC=1
           ;;
       esac
     else
       buffer_body "$BODY"
       echo "tsbeacon: $NODE buffered (resp: ${RESP:-none})" >&2
-      exit 1
+      MH_RC=1
     fi
     ;;
 esac
+
+post_cf "$BODY"
+exit "$MH_RC"

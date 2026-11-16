@@ -1,0 +1,8 @@
+name = "fleet-beacon"
+main = "worker.js"
+compatibility_date = "2026-11-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fleet-beacons"
+database_id = "9640a42d-fa39-4fb4-9254-c690a9df41d4"
