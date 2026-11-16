@@ -41,15 +41,15 @@ lightpanda_asset_name() {
 # Pinned size (bytes) + SHA256 of the official $LIGHTPANDA_VERSION asset.
 lightpanda_asset_size() {
   case "$(uname -m)" in
-    x86_64|amd64)   echo "77403464" ;;
-    aarch64|arm64)  echo "74485832" ;;
+    x86_64|amd64)   echo "77649224" ;;
+    aarch64|arm64)  echo "74747976" ;;
     *)              die "lightpanda: unsupported arch $(uname -m)" ;;
   esac
 }
 lightpanda_asset_sha256() {
   case "$(uname -m)" in
-    x86_64|amd64)   echo "53eb34da09159dcf8f04865dbfe3e63e9a652062684495aa7ced5ddd7c82e8b0" ;;
-    aarch64|arm64)  echo "20a5348bf3b6f71e41088223b188552ab550c1b9c9a9cbd8f099e6f7f3d78549" ;;
+    x86_64|amd64)   echo "7d22651129901203abdb95c64f49069c49e88f5211f4d8c4c6828c123c4adab4" ;;
+    aarch64|arm64)  echo "f021d49a0b66d07bf2633f8e00870b9075293516f872695b0ca4aeb5848b6ea8" ;;
     *)              die "lightpanda: unsupported arch $(uname -m)" ;;
   esac
 }

@@ -45,19 +45,19 @@ cloudflared_asset_name() {
 # Pinned size (bytes) + SHA256 of the official $CLOUDFLARED_VERSION asset.
 cloudflared_asset_size() {
   case "$1" in
-    cloudflared-linux-amd64)        echo "40274445" ;;
-    cloudflared-linux-arm64)        echo "37667293" ;;
-    cloudflared-darwin-amd64.tgz)   echo "21834416" ;;
-    cloudflared-darwin-arm64.tgz)   echo "19847161" ;;
+    cloudflared-linux-amd64)        echo "40283099" ;;
+    cloudflared-linux-arm64)        echo "37668707" ;;
+    cloudflared-darwin-amd64.tgz)   echo "21825349" ;;
+    cloudflared-darwin-arm64.tgz)   echo "19890696" ;;
     *)              die "cloudflared: no size pin recorded for asset $1" ;;
   esac
 }
 cloudflared_asset_sha256() {
   case "$1" in
-    cloudflared-linux-amd64)        echo "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872" ;;
-    cloudflared-linux-arm64)        echo "3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775" ;;
-    cloudflared-darwin-amd64.tgz)   echo "02f3edfd87684dd5b705607688e4eb4b323f6e777b81e7b3a85af556aa356848" ;;
-    cloudflared-darwin-arm64.tgz)   echo "3586ccf397e98e5f437e60e7c307ca6ac463e110580503af8bb8e6f9ebf831bd" ;;
+    cloudflared-linux-amd64)        echo "51f7c68b57ed7269164075d7e789efce5b59355982f06392deeb037d982a51fd" ;;
+    cloudflared-linux-arm64)        echo "abe54a006acf9faf2d19ee9d953cb0d0804e92f59c5382a162e57b84d086f56f" ;;
+    cloudflared-darwin-amd64.tgz)   echo "8a59d51120cebbe902f0a8d6e1b7a7fd4f9a5bb4dcb3e0f05872483e75e7db6b" ;;
+    cloudflared-darwin-arm64.tgz)   echo "8c2f90277ef06a6080bb40b964d33f09f1188102f8798f2e344174b6cf41accf" ;;
     *)              die "cloudflared: no SHA256 pin recorded for asset $1" ;;
   esac
 }

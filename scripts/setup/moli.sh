@@ -42,8 +42,8 @@ moli_asset_name() {
 }
 
 # Pinned size (bytes) + SHA256 of the official $MOLI_VERSION asset.
-moli_asset_size() { echo "45179259"; }
-moli_asset_sha256() { echo "7e10f9a5b62371da56203b21ac0172bbe3c3626de189fc3742b91b2e2b8cdd39"; }
+moli_asset_size() { echo "45655260"; }
+moli_asset_sha256() { echo "04c73204626054c9ec0064f7fc00abb0dcfa7f8b9c3ec9df5de8e2afc301087f"; }
 
 moli_write_env_example() {
   # A fill-in TEMPLATE for the tour config, dropped by setup next to
