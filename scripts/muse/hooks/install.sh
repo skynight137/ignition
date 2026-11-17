@@ -5,10 +5,10 @@
 # Repo is the source of truth; live copies are synced from here (repo ->
 # live, never the reverse). The hook runner only executes scripts under
 # ~/hooks/scripts/, so the live script must stay there — this repo holds
-# the versioned copy (hooks/).
+# the versioned copy (scripts/muse/hooks/).
 #
 # Usage (from the repo root, after clone or after a VM migration):
-#   bash hooks/install.sh
+#   bash scripts/muse/hooks/install.sh
 # Idempotent: safe to re-run. A live copy that differs from the repo
 # version is overwritten with the repo version and the overwrite is logged.
 #
@@ -26,8 +26,8 @@ log() {
 }
 die() { log ERROR "$*"; exit 1; }
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_DIR="$REPO_ROOT/hooks"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SRC_DIR="$REPO_ROOT/scripts/muse/hooks"
 SCRIPT_SRC="$SRC_DIR/scripts/muse-hop-stack-watch.sh"
 DEF_SRC="$SRC_DIR/definitions/muse-hop-stack-watch.json"
 HOOKS_DIR="${HOME}/hooks"

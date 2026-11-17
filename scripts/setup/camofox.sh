@@ -433,7 +433,7 @@ wait $SRV
 EOF
   # The heredoc above is quoted (every runtime $ stays literal), so the one
   # generation-time value — this skill's own setup.sh, derived from
-  # $SCRIPT_DIR like every other generated launcher (cf. expose.sh) — is
+  # $SCRIPT_DIR like every other generated launcher (cf. tailscale.sh) — is
   # substituted in afterwards. A hardcoded clone path here
   # (/home/runner/workspace/skynight137-skills/...) sent fresh users to a
   # root that exists on none of the npx-installed boxes.

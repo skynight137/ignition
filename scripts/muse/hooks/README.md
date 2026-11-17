@@ -1,4 +1,4 @@
-# hooks/
+# scripts/muse/hooks/
 
 Versioned source of truth for the muse-hop stack watchdog hook.
 
@@ -11,10 +11,10 @@ The hook runner executes **only** the live copies under `~/hooks/`:
 
 The runner rejects scripts outside `~/hooks/scripts/`, so the copies in
 this directory are **not** executed from here. They are the versioned
-source; sync is one-way, repo -> live, via `hooks/install.sh`:
+source; sync is one-way, repo -> live, via `scripts/muse/hooks/install.sh`:
 
 ```sh
-bash hooks/install.sh
+bash scripts/muse/hooks/install.sh
 ```
 
 The installer is idempotent and safe to re-run. A live copy that differs

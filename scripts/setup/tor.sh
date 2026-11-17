@@ -12,7 +12,7 @@
 #
 # DUAL-PROFILE lane: this module is sourced by BOTH profiles (repl and muse),
 # so it uses ONLY core.sh helpers (step/ok/skip/warn/die/need_cmd/
-# verify_sha256) plus plain shell. The common.sh wiring helpers
+# verify_sha256) plus plain shell. The scripts/replit/common.sh wiring helpers
 # (record_tool_env_vars / record_tool_path_dirs / wire_tool) exist only under
 # the repl profile, so they are called guarded by `declare -F` — present
 # under repl, a silent no-op under muse (whose env.sh already puts
@@ -448,7 +448,7 @@ install_tor() {
   tor_write_browser_driver
   tor_write_env_example
 
-  # Wiring (repl profile only — common.sh is not loaded under muse, and
+  # Wiring (repl profile only — scripts/replit/common.sh is not loaded under muse, and
   # there is no managed block there to wire into; the guards keep this
   # lane dual-profile). The shim bakes TOR_HOME in, so the daemon works
   # even where the var is never exported.

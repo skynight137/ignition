@@ -10,7 +10,7 @@
 # Java alone; --android-tools still pulls it in as a prerequisite
 # (install_android_tools calls install_java as before).
 #
-# $JAVA_HOME (common.sh) is a single-major home: installing a JDK
+# $JAVA_HOME (scripts/replit/common.sh) is a single-major home: installing a JDK
 # replaces whatever major sits there. The fleet default major is the
 # profile's JAVA_MAJOR (24); a box that needs another major sets
 # JAVA_MAJOR in its environment (the profile honors a pre-set value).

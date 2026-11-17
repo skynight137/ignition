@@ -84,13 +84,13 @@ RCLONE_VERSION="1.76.0"
 RCLONE_DOWNLOAD_BASE="https://downloads.rclone.org"
 # qbittorrent-nox: static single binary, arch-prefixed asset name.
 # The release tag is release-<qbt version>_v<libtorrent version>; the
-# release publishes no checksum asset, so scripts/setup/download.sh
+# release publishes no checksum asset, so scripts/setup/qbittorrent.sh
 # carries size + SHA256 pins that move with this version.
 QBT_VERSION="5.3.0_v2.1.2"
 QBT_RELEASE_BASE="https://github.com/userdocs/qbittorrent-nox-static/releases/download"
 # aria2c: github.com/aria2/aria2 releases ship SOURCE ONLY (no Linux binary);
 # abcfy2/aria2-static-build repackages those releases as static musl binaries.
-# No checksum asset either — size + SHA256 pins live in download.sh.
+# No checksum asset either — size + SHA256 pins live in aria2c.sh.
 ARIA2_VERSION="1.37.0"
 ARIA2_RELEASE_BASE="https://github.com/abcfy2/aria2-static-build/releases/download"
 # ffmpeg: BtbN static GPL builds (newer than the Replit Nix-built ffmpeg 6.1.2).
@@ -105,7 +105,7 @@ FFMPEG_RELEASE_BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download"
 # Remote access (direct binaries — see references/exposing-ports.md)
 # cloudflared: Cloudflare's tunnel client. Versionless asset names,
 # and the release publishes NO checksum asset (only the binary and
-# the .deb/.rpm packages), so scripts/setup/expose.sh carries size +
+# the .deb/.rpm packages), so scripts/setup/cloudflared.sh carries size +
 # SHA256 pins computed from the official downloads; they move with
 # this version.
 CLOUDFLARED_VERSION="2026.11.0"
@@ -231,7 +231,7 @@ done < <(compgen -e)
 # source time (common initialises env/paths first; cli runs main last).
 source "$SETUP_LIB_DIR/core.sh"
 source "$SETUP_LIB_DIR/join.sh"  # shared join engine (S3)
-source "$SETUP_LIB_DIR/common.sh"
+source "$SETUP_LIB_DIR/../replit/common.sh"  # repl-only env/paths/wiring (not loaded under muse)
 source "$SETUP_LIB_DIR/ui_menu.sh"
 source "$SETUP_LIB_DIR/bin.sh"
 source "$SETUP_LIB_DIR/fix.sh"
@@ -241,9 +241,19 @@ source "$SETUP_LIB_DIR/uv.sh"
 source "$SETUP_LIB_DIR/zsh.sh"
 source "$SETUP_LIB_DIR/java.sh"
 source "$SETUP_LIB_DIR/android.sh"
-source "$SETUP_LIB_DIR/node_opencode.sh"
-source "$SETUP_LIB_DIR/download.sh"
-source "$SETUP_LIB_DIR/expose.sh"
+source "$SETUP_LIB_DIR/node.sh"
+source "$SETUP_LIB_DIR/opencode.sh"
+source "$SETUP_LIB_DIR/ollama.sh"
+source "$SETUP_LIB_DIR/claude.sh"
+source "$SETUP_LIB_DIR/hermes.sh"
+source "$SETUP_LIB_DIR/ori.sh"
+source "$SETUP_LIB_DIR/rclone.sh"
+source "$SETUP_LIB_DIR/qbittorrent.sh"
+source "$SETUP_LIB_DIR/aria2c.sh"
+source "$SETUP_LIB_DIR/ffmpeg.sh"
+source "$SETUP_LIB_DIR/cloudflared.sh"
+source "$SETUP_LIB_DIR/tailscale.sh"
+source "$SETUP_LIB_DIR/sshx.sh"
 source "$SETUP_LIB_DIR/join-repl.sh"  # the repl join LANE (install_join); join.sh above is the shared engine
 source "$SETUP_LIB_DIR/camofox.sh"
 source "$SETUP_LIB_DIR/lightpanda.sh"

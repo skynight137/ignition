@@ -97,7 +97,7 @@ alias gclone="git clone --depth 1 --filter=blob:none"
 EOF
 
   ok "zsh installed: $XDG_BIN_HOME/zsh, dotfiles in $zdir"
-  # ZDOTDIR (set in common.sh) is what lets a bare `zsh` find $zdir; the fzf
+  # ZDOTDIR (set in scripts/replit/common.sh) is what lets a bare `zsh` find $zdir; the fzf
   # binary reaches PATH through $XDG_BIN_HOME.
   record_tool_env_vars ZDOTDIR
   record_tool_path_dirs "$XDG_BIN_HOME"

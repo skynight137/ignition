@@ -98,7 +98,7 @@ OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
 
 # tailscale user data (node key + login) — preserved by `--clean tailscale`.
 # The binaries themselves live in $XDG_BIN_HOME, like the other direct-download
-# tools (see scripts/setup/expose.sh).
+# tools (see scripts/setup/tailscale.sh).
 # NOT under $HOME: the container wipes $HOME on every restart, so a node key kept
 # there re-registers as a NEW node each boot — new 100.x address, new node name, and
 # every .ssh/config entry or saved URL pointing at the old one rots. Park the identity

@@ -1,100 +1,21 @@
 # shellcheck shell=bash
-# Remote-access installers: cloudflared (Cloudflare Tunnel), tailscale
-# (userspace tailnet client), sshx (collaborative web terminal). Sourced by
-# setup.sh. Runtime recipes live in references/exposing-ports.md — auth,
-# funnel/serve, exit nodes and the Cloudflare edge gotchas.
-# ─────────────────────────────────────────────────────────────────────────────
-# setup.sh owns these names in $XDG_BIN_HOME, and a box that was set up BY HAND
-# first (binaries in some random directory, symlinked onto PATH) must not end up
-# with two versions fighting over one name:
-#   * an existing SYMLINK at a target is reported before it is replaced — a
-#     symlink is the fingerprint of a hand-rolled install, since these installers
-#     always write real files;
-#   * a plain file is replaced quietly (it is almost always our own previous
-#     install, and announcing that on every re-run is noise);
-#   * tailscaled's user data (node key + login) lives in $TAILSCALE_DATA_DIR and
-#     is ADOPTED, never re-initialised: that is the same state dir a hand install
-#     used, so the node stays logged in and only the binary paths change.
-# None of the three is STARTED here — tailscaled needs a tailnet login first, so
-# it gets a generated launcher instead (tailscale_write_launcher).
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Report a foreign binary we are about to replace. See the header: only a symlink
-# is worth announcing, because only a symlink proves the path came from elsewhere.
+# tailscale installer (userspace tailnet client, pinned release). Sourced by setup.sh.
+# setup.sh owns these names in $XDG_BIN_HOME. An existing SYMLINK at a
+# target is reported before it is replaced (a symlink is the fingerprint
+# of a hand-rolled install); a plain file is replaced quietly.
+# tailscaled's user data (node key + login) lives in $TAILSCALE_DATA_DIR
+# and is ADOPTED, never re-initialised, so the node stays logged in and
+# only the binary paths change. Nothing here is STARTED — tailscaled needs
+# a tailnet login first, so it gets a generated launcher instead
+# (tailscale_write_launcher).
+# Report a foreign binary we are about to replace. Only a symlink is worth
+# announcing, because only a symlink proves the path came from elsewhere.
+# (Shared with the sibling remote-access files cloudflared.sh / tailscale.sh /
+# sshx.sh — keep the three copies in sync.)
 _bin_replace_note() {
   local p="$1"
   [[ -L "$p" ]] || return 0
   warn "replacing the existing symlink $p -> $(readlink "$p" 2>/dev/null) (left by an older manual install)"
-}
-
-# cloudflared — Cloudflare's tunnel client, pinned release
-# ($CLOUDFLARED_VERSION in the profile). Versionless asset names, and the
-# release publishes no checksum asset (only the binary and the .deb/.rpm
-# packages), so the size + SHA256 pins below — computed from the official
-# downloads — are the verification; they move WITH CLOUDFLARED_VERSION.
-cloudflared_asset_name() {
-  local os=linux
-  [[ "$(uname -s)" == Darwin ]] && os=darwin
-  case "$(uname -m)" in
-    x86_64|amd64)   echo "cloudflared-$os-amd64$([[ $os == darwin ]] && echo .tgz)" ;;
-    aarch64|arm64)  echo "cloudflared-$os-arm64$([[ $os == darwin ]] && echo .tgz)" ;;
-    *)              die "cloudflared: unsupported arch $(uname -m)" ;;
-  esac
-}
-
-# Pinned size (bytes) + SHA256 of the official $CLOUDFLARED_VERSION asset.
-cloudflared_asset_size() {
-  case "$1" in
-    cloudflared-linux-amd64)        echo "40283099" ;;
-    cloudflared-linux-arm64)        echo "37668707" ;;
-    cloudflared-darwin-amd64.tgz)   echo "21825349" ;;
-    cloudflared-darwin-arm64.tgz)   echo "19890696" ;;
-    *)              die "cloudflared: no size pin recorded for asset $1" ;;
-  esac
-}
-cloudflared_asset_sha256() {
-  case "$1" in
-    cloudflared-linux-amd64)        echo "51f7c68b57ed7269164075d7e789efce5b59355982f06392deeb037d982a51fd" ;;
-    cloudflared-linux-arm64)        echo "abe54a006acf9faf2d19ee9d953cb0d0804e92f59c5382a162e57b84d086f56f" ;;
-    cloudflared-darwin-amd64.tgz)   echo "8a59d51120cebbe902f0a8d6e1b7a7fd4f9a5bb4dcb3e0f05872483e75e7db6b" ;;
-    cloudflared-darwin-arm64.tgz)   echo "8c2f90277ef06a6080bb40b964d33f09f1188102f8798f2e344174b6cf41accf" ;;
-    *)              die "cloudflared: no SHA256 pin recorded for asset $1" ;;
-  esac
-}
-
-install_cloudflared() {
-  step "cloudflared (Cloudflare Tunnel client, pinned $CLOUDFLARED_VERSION)"
-  need_cmd curl
-  mkdir -p "$XDG_BIN_HOME"
-
-  local asset url tmp
-  asset="$(cloudflared_asset_name)"
-  url="$CLOUDFLARED_RELEASE_BASE/$CLOUDFLARED_VERSION/$asset"
-  tmp="$XDG_DATA_HOME/_cloudflared.bin"
-
-  echo "  Downloading $asset"
-  curl -fsSL "$url" -o "$tmp" || die "cloudflared download failed: $url"
-  verify_pinned_asset "$tmp" "$(cloudflared_asset_size "$asset")" "$(cloudflared_asset_sha256 "$asset")" "cloudflared ($asset)"
-  if [[ "$asset" == *.tgz ]]; then
-    # darwin assets ship as a tarball wrapping the bare binary
-    local exdir="$XDG_DATA_HOME/_cloudflared-extract"
-    rm -rf "$exdir"; mkdir -p "$exdir"
-    tar -xzf "$tmp" -C "$exdir" || die "cloudflared archive extract failed"
-    local inner
-    inner="$(find "$exdir" -type f -name cloudflared -print -quit)"
-    [[ -n "$inner" ]] || die "cloudflared archive is missing the 'cloudflared' binary"
-    mv -f "$inner" "$tmp"; rm -rf "$exdir"
-  fi
-  chmod +x "$tmp"
-  _bin_replace_note "$XDG_BIN_HOME/cloudflared"
-  rm -f "$XDG_BIN_HOME/cloudflared"
-  mv -f "$tmp" "$XDG_BIN_HOME/cloudflared"
-  ok "cloudflared installed: $XDG_BIN_HOME/cloudflared ($("$XDG_BIN_HOME/cloudflared" --version 2>&1 | head -1))"
-  ok "  quick tunnel (no account, prints a https://<rand>.trycloudflare.com URL):"
-  ok "    cloudflared tunnel --url http://localhost:<port>"
-  ok "  named tunnel: cloudflared tunnel run --token \"\$TOKEN\"  (see references/exposing-ports.md)"
-  record_tool_path_dirs "$XDG_BIN_HOME"
-  wire_tool cloudflared -- "$XDG_BIN_HOME"
 }
 
 # tailscale — official stable channel, pinned version (TAILSCALE_VERSION
@@ -102,7 +23,6 @@ install_cloudflared() {
 # tarball name embeds the version; each archive ships a
 # `<tarball>.sha256` next to it, which is verified.
 # tailscale_asset_name lives in scripts/setup/core.sh (shared library).
-
 # The daemon cannot be started by an installer (it needs a tailnet login first),
 # but it CAN be started from a stable path. This launcher is that path: written
 # on install and re-written by --fix, like the camofox launcher, so a .replit
@@ -250,45 +170,3 @@ install_tailscale() {
   tailscale_write_launcher
 }
 
-# sshx — collaborative web terminal. Its GitHub releases carry NO assets, so the
-# versionless S3 tarball (what sshx.io/get pulls) is the only artifact; no
-# checksum is published. The archive holds a single `sshx` binary.
-sshx_asset_name() {
-  case "$(uname -m)" in
-    x86_64|amd64)   echo "sshx-x86_64-unknown-linux-musl.tar.gz" ;;
-    aarch64|arm64)  echo "sshx-aarch64-unknown-linux-musl.tar.gz" ;;
-    *)              die "sshx: unsupported arch $(uname -m)" ;;
-  esac
-}
-
-install_sshx() {
-  step "sshx (collaborative web terminal)"
-  need_cmd curl
-  need_cmd tar
-  mkdir -p "$XDG_BIN_HOME"
-
-  local asset url tmp tmpdir bin
-  asset="$(sshx_asset_name)"
-  url="$SSHX_DOWNLOAD_BASE/$asset"
-  tmp="$XDG_DATA_HOME/_sshx.tar.gz"
-  tmpdir="$XDG_DATA_HOME/_sshx-extract"
-
-  echo "  Downloading $asset"
-  curl -fsSL "$url" -o "$tmp" || die "sshx download failed: $url"
-
-  rm -rf "$tmpdir"
-  mkdir -p "$tmpdir"
-  tar -xzf "$tmp" -C "$tmpdir"
-  # Layout-agnostic: the archive may or may not wrap the binary in a dir.
-  bin="$(find "$tmpdir" -type f -name sshx -print -quit)"
-  [[ -n "$bin" ]] || die "sshx archive is missing the 'sshx' binary"
-  _bin_replace_note "$XDG_BIN_HOME/sshx"
-  rm -f "$XDG_BIN_HOME/sshx"
-  mv -f "$bin" "$XDG_BIN_HOME/sshx"
-  chmod +x "$XDG_BIN_HOME/sshx"
-  rm -rf "$tmpdir" "$tmp"
-  ok "sshx installed: $XDG_BIN_HOME/sshx ($("$XDG_BIN_HOME/sshx" --version 2>&1 | head -1))"
-  ok "  share a shell: sshx   (prints a web URL; nothing listens locally)"
-  record_tool_path_dirs "$XDG_BIN_HOME"
-  wire_tool sshx -- "$XDG_BIN_HOME"
-}
