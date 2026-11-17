@@ -164,7 +164,11 @@ doctor() {
      && file -L "$WORKSPACE/.local/lib/libatomic.so.1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; then
     ok "libatomic in pool ($WORKSPACE/.local/lib)"
   else
-    warn "libatomic missing/not x86-64 in $WORKSPACE/.local/lib — node will fail to load; run: bash setup.sh --fix"
+    if [[ "${REPLIT_MODE:-false}" == true ]]; then
+      warn "libatomic missing/not x86-64 in $WORKSPACE/.local/lib — node will fail to load; run: bash setup.sh --fix"
+    else
+      warn "libatomic missing/not x86-64 (system loader + $WORKSPACE/.local/lib) — node will fail to load; muse: apt-get install -y libatomic1"
+    fi
     wfail=1
   fi
   if [[ -d "$HERMES_HOME/tools" ]]; then

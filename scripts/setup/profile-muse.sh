@@ -10,7 +10,7 @@
 #                               already lives at <ws>/.ssh keeps that
 #                               path — see the SSHDIR resolution below)
 #   $SSHDIR/reverse/            reverse-tunnel client config + loop state
-#   <ws>/tools/                 tailscale / tailscaled + tool binaries
+#   ~/.local/bin/               tailscale / tailscaled + tool binaries
 #                               (fresh installs, FLAT — no bin/ subdir;
 #                               a box already running from
 #                               <ws>/.local/bin keeps that path —
@@ -22,7 +22,9 @@
 #                               already lives at
 #                               <ws>/.local/share/tailscale keeps that
 #                               path — see the TSDIR resolution below)
-#   <ws>/config/                shared env + tool configs (env.sh, ...)
+#   ~/.config/stack/env.sh      shared env (XDG + MUSE_HOME + PATH;
+#                               written only when missing — a live copy
+#                               is fleet-managed)
 #   /root/.ssh                  symlink -> $SSHDIR (root's passwd home is
 #                               /root, so tooling that resolves ~ via
 #                               passwd needs the pointer). Legacy boxes
@@ -77,6 +79,32 @@
 # ($SSHDIR/id_ed25519.pub, printed at the end) to the peer's sshd.
 set -euo pipefail
 
+# XDG roots (muse layout — HOME-based, mirroring the platform's guest.env).
+# Every tool lane keys off these; they must end set before common-muse.sh
+# is sourced. A pre-set value wins (operator/platform override); otherwise
+# the HOME fallback applies. $WORKSPACE is never an XDG root on muse.
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
+export XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_BIN_HOME
+REPLIT_MODE=false
+WORKSPACE="$HOME/workspace"
+WS="$WORKSPACE"
+# Shell target for the toolchain block (rc writer). MUSE_ENV_FILE lets the
+# test harness point wiring at a scratch env file.
+BASHRC="${MUSE_ENV_FILE:-$HOME/.config/stack/env.sh}"
+# Snapshot the environment (name → value) BEFORE the script assigns or
+# exports anything — input to the rc writer's no-shadowing rule. Values
+# matter, not names: our own previous managed block comes back through the
+# inherited env on re-runs and must be re-emitted, not mistaken for
+# operator choices.
+declare -A _PRESET_ENV=()
+while IFS= read -r _env_name; do
+  [[ "$_env_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && _PRESET_ENV["$_env_name"]="${!_env_name}"
+done < <(compgen -e)
+
 PEER="${RS_PEER:-}" VERIFY=0
 SSH_USER="${RS_SSH_USER:-root}"
 DO_SSHD=0 DO_TAILSCALE=0 DO_JOIN=0 DO_MENU=0 SELECTED=0
@@ -88,7 +116,25 @@ while [[ $# -gt 0 ]]; do
     --user) SSH_USER=$2; shift 2 ;;
     --verify) VERIFY=1; shift ;;
     --sshd) DO_SSHD=1; SELECTED=1; shift ;;
-    --tailscale) DO_TAILSCALE=1; SELECTED=1; shift ;;
+    # Tool flags (same names as the repl parser): install the lane, then
+    # run muse_main before the join phases. --tailscale here means the
+    # tailscale LANE (binaries); the join phase (DO_TAILSCALE, set by the
+    # menu / --join implication) delegates to the same lane.
+    -n|--node) INSTALL_NODE=true; SELECTED=1; shift ;;
+    -oc|--opencode) INSTALL_OPENCODE=true; SELECTED=1; shift ;;
+    -ol|--ollama) INSTALL_OLLAMA=true; SELECTED=1; shift ;;
+    -cl|--claude) INSTALL_CLAUDE=true; SELECTED=1; shift ;;
+    -ha|--hermes) INSTALL_HERMES=true; SELECTED=1; shift ;;
+    -ori|--openrouterai) INSTALL_ORI=true; SELECTED=1; shift ;;
+    -r|--rclone) INSTALL_RCLONE=true; SELECTED=1; shift ;;
+    -q|--qbt) INSTALL_QBT=true; SELECTED=1; shift ;;
+    -a2|--aria2) INSTALL_ARIA2=true; SELECTED=1; shift ;;
+    -f|--ffmpeg) INSTALL_FFMPEG=true; SELECTED=1; shift ;;
+    -cf|--cloudflared) INSTALL_CLOUDFLARED=true; SELECTED=1; shift ;;
+    -ts|--tailscale) INSTALL_TAILSCALE=true; SELECTED=1; shift ;;
+    -sx|--sshx) INSTALL_SSHX=true; SELECTED=1; shift ;;
+    --all) INSTALL_ALL=true; SELECTED=1; shift ;;
+    --doctor) DOCTOR=true; SELECTED=1; shift ;;
     --tor) DO_TOR=1; SELECTED=1; shift ;;
     -j|--join) DO_JOIN=1; SELECTED=1; shift ;;
     --menu) DO_MENU=1; shift ;;
@@ -106,19 +152,35 @@ done
 _SETUP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 MUSE_PAYLOAD_DIR="$(cd -- "$_SETUP_DIR/../muse" 2>/dev/null && pwd)"  # ts_proxy_connect.py stayed with the muse payloads
 SETUP_ENTRY="$(cd -- "$_SETUP_DIR/.." 2>/dev/null && pwd)/setup.sh"  # the unified entry (scripts/setup.sh); _SETUP_DIR is unset below, this stays
-if [[ -f "$_SETUP_DIR/core.sh" ]]; then
-  source "$_SETUP_DIR/core.sh"
-else
-  echo "setup: missing shared library $_SETUP_DIR/core.sh — run from a full clone of skynight137/skills" >&2
-  exit 2
-fi
+# Source order matters only for the top-level setup each module runs at
+# source time (common-muse initialises env/paths/registry first; the lanes
+# only define install_* functions). cli.sh is NOT sourced under muse —
+# muse_main (scripts/muse/common.sh) is the tool dispatcher.
+source "$_SETUP_DIR/core.sh"
+source "$_SETUP_DIR/versions.sh"  # shared pins (one source of truth for repl + muse)
+source "$_SETUP_DIR/../muse/common.sh"  # muse-only env/paths/wiring (not loaded under repl)
+source "$_SETUP_DIR/bin.sh"
+source "$_SETUP_DIR/rc.sh"  # writers only under muse (replit writers early-return)
+source "$_SETUP_DIR/doctor.sh"
+source "$_SETUP_DIR/node.sh"
+source "$_SETUP_DIR/opencode.sh"
+source "$_SETUP_DIR/ollama.sh"
+source "$_SETUP_DIR/claude.sh"
+source "$_SETUP_DIR/hermes.sh"
+source "$_SETUP_DIR/ori.sh"
+source "$_SETUP_DIR/rclone.sh"
+source "$_SETUP_DIR/qbittorrent.sh"
+source "$_SETUP_DIR/aria2c.sh"
+source "$_SETUP_DIR/ffmpeg.sh"
+source "$_SETUP_DIR/cloudflared.sh"
+source "$_SETUP_DIR/tailscale.sh"
+source "$_SETUP_DIR/sshx.sh"
 # Tor browser lane (dual-profile module — core.sh helpers only, so it loads
 # here too). Sourced unconditionally; --tor calls install_tor.
 if [[ -f "$_SETUP_DIR/tor.sh" ]]; then
   source "$_SETUP_DIR/tor.sh"
 fi
 unset _SETUP_DIR
-WS="$HOME/workspace"
 # The stack tree's home: fresh installs use the OFFICIAL location,
 # ~/.ssh, as a REAL directory — the path standard tooling (ssh, git
 # signing) resolves via passwd/$HOME with no shim in between.
@@ -148,16 +210,15 @@ else
   SSHDIR="$HOME/.ssh"
 fi
 unset _ssh_dir_env _cand _v
-# Tool binaries live in the workspace tools dir — the fleet's chosen
-# layout (~/workspace/tools for binaries — FLAT, no bin/ subdir —
-# ~/workspace/config for tool configs), away from the platform's own
-# directories.
+# Tool binaries live in $HOME/.local/bin — the fleet's settled layout
+# (binaries -> ~/.local/bin, FLAT, no bin/ subdir; this is also
+# XDG_BIN_HOME, the single PATH entry the lanes install into).
 # Install-location stickiness: egress approvals are keyed by binary
 # path, so a box already running tailscale from the legacy bin dir
 # (~/workspace/.local/bin) keeps using it — silently relocating a live
 # stack would re-mint approval cards and strand its state for no gain.
 # Only a fresh install (no tailscaled in the legacy dir) lands in
-# tools/ (flat). RS_TS_BIN_DIR (process env, or the stack .env) overrides
+# ~/.local/bin. RS_TS_BIN_DIR (process env, or the stack .env) overrides
 # both — it is also the deliberate-migration path: set it, let
 # phase_tailscale install there, then retire the legacy copy.
 LEGACY_BINDIR="$WS/.local/bin"
@@ -169,7 +230,7 @@ elif [[ -n "$_ts_bin_dir_env" ]]; then
 elif [[ -x "$LEGACY_BINDIR/tailscaled" ]]; then
   BINDIR="$LEGACY_BINDIR"
 else
-  BINDIR="$WS/tools"
+  BINDIR="$HOME/.local/bin"
 fi
 unset _ts_bin_dir_env
 # The daemon's state dir is runtime state, so it follows the XDG
@@ -198,7 +259,11 @@ fi
 unset _ts_state_dir_env
 REVDIR="$SSHDIR/reverse"
 LOGDIR="$WS/logs"
-TSVER=1.104.4
+# The tailscale lane reads these; pin them to the profile's resolved dirs
+# (the state file IS the node's identity — the profile owns this resolution).
+TAILSCALE_STATE_DIR="$TSDIR"
+TAILSCALE_SOCKET="$TSDIR/tailscaled.sock"
+TAILSCALE_LOG="$LOGDIR/tailscaled.log"
 CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy)
 
 say() { printf '\n== %s ==\n' "$*"; }
@@ -414,7 +479,6 @@ start_tailscale() {
   # (XDG state home or legacy workspace share).
   local _anc="$TSDIR"
   while [[ "$_anc" == "$HOME"/* ]]; do [ -d "$_anc" ] && chmod o+x "$_anc" || true; _anc="$(dirname "$_anc")"; done
-  [[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
   [[ -d "$BINDIR" ]] && chmod o+x "$BINDIR"
   if [[ "$SSH_USER" != root ]]; then
     id "$SSH_USER" >/dev/null 2>&1 || useradd -d "$SVC_HOME" -s /bin/bash "$SSH_USER"
@@ -570,7 +634,7 @@ fi
 phase_sshd() {
 say "layout + users"
 chmod o+x "$HOME" "$WS"
-mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$LOGDIR"
+mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$LOGDIR"
 chown "$SSH_USER:$SSH_USER" "$LOGDIR" 2>/dev/null || true
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
 # Same traverse walk as start_tailscale: the daemon's ancestors of
@@ -580,7 +644,6 @@ _anc="$TSDIR"; while [[ "$_anc" == "$HOME"/* ]]; do [ -d "$_anc" ] && chmod o+x 
 # service-user-owned — see start_tailscale) so phase order cannot
 # leave the state dir traverse-open.
 if [[ -d "$TSDIR" ]]; then chown "$SSH_USER:$SSH_USER" "$TSDIR" 2>/dev/null || true; chmod 700 "$TSDIR"; fi
-[[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
 chmod o+x "$BINDIR"
 # sshd runs as the service user and must write its pid inside
 # join-tailnet (its log goes to $WS/logs, also service-user-owned),
@@ -689,8 +752,14 @@ fi
 # (ephemeral), so tooling that resolves ~ via passwd needs the link.
 if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
 
-say "shared env (config/env.sh) + .env template"
-cat > "$WS/config/env.sh" <<EOF
+say "shared env (~/.config/stack/env.sh) + .env template"
+# The shared env lives at ~/.config/stack/env.sh (the fleet stack layer;
+# ~/.bashrc already hooks it). Write the template ONLY when the file is
+# missing — a live copy is fleet-managed (secrets loader + PATH cases)
+# and must never be clobbered by a re-run.
+if [[ ! -f "$HOME/.config/stack/env.sh" ]]; then
+  mkdir -p "$HOME/.config/stack"
+  cat > "$HOME/.config/stack/env.sh" <<EOF
 # Shared environment for this VM — non-secret config only.
 # XDG values mirror the platform's own guest.env (runtime-cell):
 # HOME-based, all on the persistent home volume. (The tailscale
@@ -703,19 +772,20 @@ export XDG_STATE_HOME="\$HOME/.local/state"
 # Toolchain anchor: the persistent target path for fleet tooling.
 export MUSE_HOME="\$HOME/workspace"
 case ":\$PATH:" in
-  *":\$HOME/workspace/tools:"*) ;;
-  *) export PATH="\$HOME/workspace/tools:\$HOME/workspace/.local/bin:$SSHDIR/bin:\$PATH" ;;
+  *":$BINDIR:"*) ;;
+  *) export PATH="$BINDIR:\$HOME/.local/bin:$SSHDIR/bin:\$PATH" ;;
 esac
 if [ -r "$SSHDIR/.env" ]; then
   set -a; . "$SSHDIR/.env"; set +a
 fi
 EOF
-chmod 644 "$WS/config/env.sh"
+  chmod 644 "$HOME/.config/stack/env.sh"
+fi
 if ! grep -q "muse shared env" "$HOME/.bashrc" 2>/dev/null; then
   cat >> "$HOME/.bashrc" <<'EOF'
 
 # >>> muse shared env >>>
-[ -f "$HOME/workspace/config/env.sh" ] && . "$HOME/workspace/config/env.sh"
+[ -f "$HOME/.config/stack/env.sh" ] && . "$HOME/.config/stack/env.sh"
 # <<< muse shared env <<<
 EOF
 fi
@@ -738,7 +808,7 @@ RS_TS_STATE_DIR=$TSDIR
 #  identity and the stack never relocates it. Change this to migrate deliberately —
 #  stop the daemon first and move the whole state dir, socket path included.)
 #RS_TS_BIN_DIR= (optional override: where the tailscale binaries live. Defaults:
-# a fresh install uses ~/workspace/tools (flat), but a box already running tailscale
+# a fresh install uses ~/.local/bin (flat), but a box already running tailscale
 # from ~/workspace/.local/bin keeps that path — egress approvals are keyed by
 # binary path, so the stack never relocates itself. Set this to migrate deliberately.)
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
@@ -765,7 +835,7 @@ XDG_CONFIG_HOME=$HOME/.config
 XDG_CACHE_HOME=$HOME/.cache
 XDG_STATE_HOME=$HOME/.local/state
 PATH=$BINDIR:$SSHDIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-BASH_ENV=$WS/config/env.sh
+BASH_ENV=$HOME/.config/stack/env.sh
 EOF
 if [[ "$SSH_USER" != root ]]; then
   chown -R "$SSH_USER:$SSH_USER" "$SVC_HOME/.ssh" 2>/dev/null || true
@@ -822,20 +892,18 @@ EOF
 
 }
 phase_tailscale() {
-say "tailscale binaries (pinned $TSVER, checksum verified)"
+say "tailscale binaries (pinned $TAILSCALE_VERSION, checksum verified)"
 if [[ ! -x "$BINDIR/tailscaled" ]]; then
-  mkdir -p "$BINDIR"
-  TGZ="$(tailscale_asset_name "$TSVER")"
-  curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
-  # Upstream's .sha256 may be a bare hash with no filename, which makes
-  # `sha256sum -c` fail ("no properly formatted checksum lines") — take
-  # the first field, robust to both formats, and let core's verifier
-  # do the comparison.
-  EXPECTED="$(curl -fsSL "https://pkgs.tailscale.com/stable/$TGZ.sha256" | awk '{print $1}')"
-  verify_sha256 "/tmp/$TGZ" "$EXPECTED" "tailscale ($TGZ)"
-  tar -xzf "/tmp/$TGZ" -C /tmp
-  install -m755 "/tmp/${TGZ%.tgz}/tailscale" "/tmp/${TGZ%.tgz}/tailscaled" "$BINDIR/"
-  rm -rf "/tmp/$TGZ" "/tmp/${TGZ%.tgz}"
+  # Single source of truth: the tailscale lane installs the binaries
+  # (to $XDG_BIN_HOME, which is $HOME/.local/bin on a fresh box).
+  install_tailscale
+  # Legacy box whose BINDIR is the old workspace dir: the lane's binaries
+  # live elsewhere, so point the approved legacy path at them instead of
+  # leaving the join with no binary at $BINDIR.
+  if [[ "$BINDIR" != "$XDG_BIN_HOME" ]]; then
+    ln -sfn "$XDG_BIN_HOME/tailscale" "$BINDIR/tailscale"
+    ln -sfn "$XDG_BIN_HOME/tailscaled" "$BINDIR/tailscaled"
+  fi
 fi
 chown "$SSH_USER:$SSH_USER" "$TSDIR" 2>/dev/null || true
 
@@ -886,7 +954,7 @@ _menu_status() {
   local b n
   b="$(timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null || true)"
   [[ -n "$b" ]] && echo "sshd: $b" || echo "sshd: DOWN"
-  [[ -x "$BINDIR/tailscaled" ]] && echo "tailscale binaries: installed ($TSVER)" || echo "tailscale binaries: not installed"
+  [[ -x "$BINDIR/tailscaled" ]] && echo "tailscale binaries: installed ($TAILSCALE_VERSION)" || echo "tailscale binaries: not installed"
   n="$(svc_run "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>/dev/null | head -1 || true)"
   [[ -n "$n" ]] && echo "node: $n" || echo "node: DOWN"
 }
@@ -961,6 +1029,11 @@ if [[ $((DO_START_SSHD + DO_START_TS + DO_CHECK_REVERSE + DO_LOOP)) -gt 0 ]]; th
   run_verbs
   exit 0
 fi
+# Tool installs (--node/--rclone/...): run before the join phases so a
+# --tailscale --join run has binaries before phase_join starts the node.
+if any_tool_requested; then
+  muse_main || exit 1
+fi
 if [[ $DO_JOIN -eq 1 ]]; then
   # -j implies the phases whose outputs it starts, when they are missing.
   [[ -f "$SSHDIR/join-tailnet/sshd_config" && -x "$SSHDIR/rootfs/usr/sbin/sshd" ]] || DO_SSHD=1
@@ -972,3 +1045,9 @@ fi
 # install_tor is the dual-profile lane function in scripts/setup/tor.sh.
 [[ $DO_TOR -eq 1 ]] && install_tor
 [[ $DO_JOIN -eq 1 ]] && phase_join
+
+# Tool/phase runs end here: the dispatch above is a chain of guarded
+# calls whose last status would otherwise leak out as the script exit
+# code (a --doctor-only run exited 1 on a bare `[[ ... ]] && ...`).
+# muse_main already exits 1 on install failures, so 0 here means success.
+exit 0

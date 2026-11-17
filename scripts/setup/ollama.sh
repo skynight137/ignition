@@ -5,14 +5,21 @@ install_ollama() {
   step "Ollama (LLM runtime)"
 
   # The official Ollama installer needs zstd to decompress the release archive.
-  # On Replit, apt is blocked but zstd ships in the Nix store — surface it on PATH.
+  # Replit: apt is blocked but zstd ships in the Nix store — surface it on PATH.
+  # Muse: the box has apt (root) — install it; update first, stale lists fail.
   if ! command -v zstd >/dev/null; then
-    local zstd_bin
-    zstd_bin="$(ls -d /nix/store/*zstd-*-bin/bin 2>/dev/null | head -1)"
-    if [[ -n "$zstd_bin" ]]; then
-      export PATH="$zstd_bin:$PATH"
+    if [[ "${REPLIT_MODE:-false}" == true ]]; then
+      local zstd_bin
+      zstd_bin="$(ls -d /nix/store/*zstd-*-bin/bin 2>/dev/null | head -1)"
+      if [[ -n "$zstd_bin" ]]; then
+        export PATH="$zstd_bin:$PATH"
+      fi
+    elif command -v apt-get >/dev/null 2>&1; then
+      apt-get update -qq 2>/dev/null || true
+      apt-get install -y zstd 2>/dev/null || true
     fi
   fi
+  command -v zstd >/dev/null || die "ollama needs zstd (muse: apt-get install -y zstd; repl: Nix store)"
 
   # The official Ollama installer hardcodes /usr/local/bin and insists on sudo.
   # Patch it to honor OLLAMA_INSTALL_DIR (payload) and OLLAMA_BIN_DIR (symlink).

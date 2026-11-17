@@ -50,11 +50,24 @@ install_node() {
   # version while the binary could not load. Probe explicitly and die.
   local node_ver
   if ! node_ver="$("$NODE_DIR/bin/node" --version 2>&1)"; then
-    die "node staged at $NODE_DIR but cannot load: $node_ver (ensure_libatomic output above? rerun: bash setup.sh --fix)"
+    local _hint
+    if [[ "${REPLIT_MODE:-false}" == true ]]; then
+      _hint="ensure_libatomic output above? rerun: bash setup.sh --fix"
+    else
+      _hint="muse: ldconfig -p | grep libatomic (system libatomic1)"
+    fi
+    die "node staged at $NODE_DIR but cannot load: $node_ver ($_hint)"
   fi
   ok "Node.js installed: $NODE_DIR ($node_ver)"
   record_tool_env_vars NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}"
-  record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
-  wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+  # $WORKSPACE/node_modules/.bin is a Replit-layout PATH entry (project
+  # binaries live under the workspace there); a Muse VM has no such dir.
+  if [[ "${REPLIT_MODE:-false}" == true ]]; then
+    record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+    wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+  else
+    record_tool_path_dirs "$NODE_DIR/bin" "$XDG_BIN_HOME"
+    wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$XDG_BIN_HOME"
+  fi
 }
 
