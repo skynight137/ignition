@@ -3,7 +3,7 @@
 # (payload-store on muse-hop, port 8099) over `tailscale nc`.
 #
 # Design: designs/beacon-cc.md in the heavenly-host repo. Fleet copy:
-# this file ships with ignition so every joined box carries it; the
+# this file ships with toolskit so every joined box carries it; the
 # heavenly-host tools/ original is the pilot artifact it derives from.
 # Machine stats ONLY — no secrets, no user data. If the POST fails, the
 # payload is buffered in the

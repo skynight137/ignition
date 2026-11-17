@@ -1,10 +1,10 @@
-# ignition
+# toolskit
 
 Setup and machining repo for the fleet and Muse VMs. One entry point provisions a box: toolchains, Tailscale join, shell rc, `.replit` workflows, beacon loop, and the tour engine.
 
 ## Explain
 
-`ignition` turns a fresh box into a working fleet node. Two machine kinds, one command surface:
+`toolskit` turns a fresh box into a working fleet node. Two machine kinds, one command surface:
 
 - **Replit workspace** (`--machine repl`) — full stack: uv, Node/opencode, Java/Android, download tools, cloudflared, Tailscale join, Camoufox, Lightpanda, Moli, Tor, Hermes Chromium, llm-wiki, plus the beacon loop and watchdog.
 - **Muse VM** (`--machine muse`) — the join stack: sshd, Tailscale binaries, reverse-tunnel loop, Termix user units, run as an unprivileged service user (`--user runner`).
@@ -70,8 +70,8 @@ tests/
 ## Quick Start
 
 ```bash
-git clone https://github.com/skynight137/ignition
-cd ignition
+git clone https://github.com/skynight137/toolskit
+cd toolskit
 
 # Muse VM: join stack as the unprivileged service user
 bash scripts/setup.sh --machine muse --user runner --tailscale --join
@@ -120,8 +120,8 @@ Operator brings up a fresh Muse VM as a join target, then a Replit box:
 
 ```bash
 # 1. On the fresh Muse VM: clone, create the stack .env with the auth key
-git clone https://github.com/skynight137/ignition
-cd ignition
+git clone https://github.com/skynight137/toolskit
+cd toolskit
 printf 'TAILSCALE_AUTH_KEY=<key>\n' > ~/.ssh/.env && chmod 600 ~/.ssh/.env
 
 # 2. Install the join stack as runner and join the tailnet
@@ -133,8 +133,8 @@ bash scripts/setup.sh --machine muse --verify
 #    -> sshd listening, tailscaled up, node joined, reverse loop running
 
 # 4. On a fresh Replit workspace: clone and run the pick-menu
-git clone https://github.com/skynight137/ignition
-cd ignition
+git clone https://github.com/skynight137/toolskit
+cd toolskit
 bash scripts/setup.sh --machine repl
 #    -> pick the lanes in the menu; the join lane starts the beacon loop
 #       and watchdog detached when tailscaled is up

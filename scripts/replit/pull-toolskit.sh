@@ -9,7 +9,7 @@
 #      provide are copied into the fresh clone; the whole old dir is
 #      moved aside to a timestamped backup (nothing deleted)
 #   3. move the fresh clone into place
-# Usage: bash ignition/scripts/replit/pull-toolskit.sh
+# Usage: bash workspace/ignition/scripts/replit/pull-toolskit.sh
 set -u
 U="https://github.com/skynight137/toolskit.git"
 D="$HOME/workspace/ignition"

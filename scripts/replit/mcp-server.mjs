@@ -30,9 +30,9 @@
 //   404/-32001; a post-initialize request carrying an unsupported MCP-Protocol-Version
 //   header gets 400/-32000. GET /mcp stays 405 (no SSE stream offered — deliberate).
 // - Read-only filesystem tools: read_text_file, list_directory, get_file_info,
-//   search_files. Allowed roots are ~/workspace and ~/skynight137/ignition, resolved
+//   search_files. Allowed roots are ~/workspace and ~/skynight137/toolskit, resolved
 //   via realpath at startup (a root that does not exist is dropped with a warning;
-//   on a repl node ~/skynight137/ignition does not exist, so only ~/workspace
+//   on a repl node ~/skynight137/toolskit does not exist, so only ~/workspace
 //   remains — ~/workspace/ignition is inside it anyway). Every call re-validates
 //   (prefix check + realpath re-check) so symlink escapes are refused. No write
 //   tools in this version (P1, after review).
@@ -112,7 +112,7 @@ if (HOST !== "127.0.0.1" && HOST !== "::1") {
 // not exist is dropped with a warning; the process exits if none is usable.
 const HOME_DIR = os.homedir();
 const FS_ROOTS = [];
-for (const p of [join(HOME_DIR, "workspace"), join(HOME_DIR, "skynight137", "ignition")]) {
+for (const p of [join(HOME_DIR, "workspace"), join(HOME_DIR, "skynight137", "toolskit")]) {
   try {
     FS_ROOTS.push({ original: p, resolved: realpathSync(p) });
   } catch (err) {
@@ -208,7 +208,7 @@ const FS_TOOLS = [
   {
     name: "read_text_file",
     description:
-      "Read a text file inside the allowed directories (~/workspace, ~/skynight137/ignition). Returns the file text (optionally only the first/last N lines) plus size and line counts. Refuses files over 1 MB and files containing NUL bytes.",
+      "Read a text file inside the allowed directories (~/workspace, ~/skynight137/toolskit). Returns the file text (optionally only the first/last N lines) plus size and line counts. Refuses files over 1 MB and files containing NUL bytes.",
     inputSchema: {
       type: "object",
       properties: {
