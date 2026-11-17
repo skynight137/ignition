@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Ollama installer. Sourced by setup.sh.
+# Ollama installer (pinned release tarball). Sourced by setup.sh.
 # Ollama (LLM runtime) ───────────────────────────────────────────────────────
 install_ollama() {
   step "Ollama (LLM runtime)"
@@ -21,37 +21,23 @@ install_ollama() {
   fi
   command -v zstd >/dev/null || die "ollama needs zstd (muse: apt-get install -y zstd; repl: Nix store)"
 
-  # The official Ollama installer hardcodes /usr/local/bin and insists on sudo.
-  # Patch it to honor OLLAMA_INSTALL_DIR (payload) and OLLAMA_BIN_DIR (symlink).
+  # Pinned release: versioned GitHub tarball + published sha256sum.txt.
+  # No installer script — the old ollama.com/install.sh resolved latest
+  # internally, so the version on the box floated. OLLAMA_VERSION lives
+  # in scripts/setup/versions.sh (single source of truth).
   need_cmd curl
+  need_cmd sha256sum
   mkdir -p "$XDG_DATA_HOME" "$XDG_BIN_HOME"
-  local installer="$XDG_DATA_HOME/_ollama-install.sh"
-  curl -fsSL https://ollama.com/install.sh -o "$installer" \
-    || die "could not download Ollama installer"
-  chmod +x "$installer"
-
-  sed -i \
-    -e 's/SUDO="sudo"/SUDO=""/' \
-    -e 's/ -o0 -g0//g' \
-    -e 's/^    configure_systemd$/    : # user-local install: no systemd service, no system user/' \
-    -e 's#^OLLAMA_INSTALL_DIR=$(dirname${BINDIR})#:#' \
-    -e "s#for BINDIR in /usr/local/bin /usr/bin /bin; do#OLLAMA_INSTALL_DIR=\"\${OLLAMA_INSTALL_DIR:-/usr/local}\"; OLLAMA_BIN_DIR=\"\${OLLAMA_BIN_DIR:-\$OLLAMA_INSTALL_DIR/bin}\"; for BINDIR in \"\$OLLAMA_BIN_DIR\"; do#" \
-    "$installer"
-
-  if grep -q 'SUDO="sudo"' "$installer"; then
-    rm -f "$installer"
-    die "Ollama installer patch failed (sudo still present) — upstream changed. Report: https://github.com/ollama/ollama/releases"
-  fi
-
-  # The upstream script calls configure_systemd whenever a systemctl
-  # binary exists; that function creates a system user and a systemd
-  # unit, which a user-local install must never do (it hard-fails
-  # without root — caught by the CI tool-setup leg on a stock Ubuntu
-  # runner, where systemctl exists but there is no systemd running).
-  if grep -qE '^    configure_systemd$' "$installer"; then
-    rm -f "$installer"
-    die "Ollama installer patch failed (configure_systemd call still present) — upstream changed. Report: https://github.com/ollama/ollama/releases"
-  fi
+  local base="${OLLAMA_RELEASE_BASE:-https://github.com/ollama/ollama/releases/download}"
+  local ver="${OLLAMA_VERSION:?OLLAMA_VERSION is not set (versions.sh)}"
+  local tarball="$XDG_DATA_HOME/ollama-linux-amd64.tar.zst"
+  local sums="$XDG_DATA_HOME/_ollama-sha256sum.txt"
+  curl -fsSL "$base/v$ver/ollama-linux-amd64.tar.zst" -o "$tarball" \
+    || die "could not download Ollama $ver tarball"
+  curl -fsSL "$base/v$ver/sha256sum.txt" -o "$sums" \
+    || die "could not download Ollama $ver checksums"
+  ( cd "$XDG_DATA_HOME" && grep -F 'ollama-linux-amd64.tar.zst' "$sums" | sha256sum -c - ) \
+    || die "Ollama $ver tarball checksum mismatch"
 
   # Fresh-install contract: replace the payload, KEEP downloaded models
   # ($OLLAMA_MODELS) — they are user data, not install artifacts.
@@ -66,13 +52,23 @@ install_ollama() {
     mv "$models_backup" "$OLLAMA_MODELS"
   fi
 
-  OLLAMA_INSTALL_DIR="$OLLAMA_INSTALL_DIR" OLLAMA_BIN_DIR="$OLLAMA_INSTALL_DIR/bin" bash "$installer" \
-    || die "ollama installer failed"
-  rm -f "$installer"
+  # Extract the whole tarball into the payload (it carries lib/ runners
+  # next to the binary — copying the binary alone would break model
+  # serving). zstd is already verified above. The payload dir was wiped
+  # above, so create it here (the old installer used to create it).
+  mkdir -p "$OLLAMA_INSTALL_DIR"
+  zstd -dc "$tarball" | tar -xf - -C "$OLLAMA_INSTALL_DIR" \
+    || die "ollama $ver tarball extract failed"
+  rm -f "$tarball" "$sums"
 
-  if [[ ! -x "$OLLAMA_INSTALL_DIR/bin/ollama" && -x "$OLLAMA_INSTALL_DIR/ollama" ]]; then
+  # Release tarballs vary in layout (bin/ollama vs top-level ollama);
+  # make sure the canonical path exists either way.
+  if [[ ! -x "$OLLAMA_INSTALL_DIR/bin/ollama" ]]; then
+    local found_bin
+    found_bin="$(find "$OLLAMA_INSTALL_DIR" -name ollama -type f -perm -u+x 2>/dev/null | head -1)"
+    [[ -n "$found_bin" ]] || die "ollama binary not found in $ver tarball"
     mkdir -p "$OLLAMA_INSTALL_DIR/bin"
-    ln -sfn "$OLLAMA_INSTALL_DIR/ollama" "$OLLAMA_INSTALL_DIR/bin/ollama"
+    ln -sfn "$found_bin" "$OLLAMA_INSTALL_DIR/bin/ollama"
   fi
 
   [[ -x "$OLLAMA_INSTALL_DIR/bin/ollama" ]] \

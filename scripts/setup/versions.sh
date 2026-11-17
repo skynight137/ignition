@@ -14,6 +14,11 @@ JAVA_TOOL_OPTS_VALUE="-XX:-UsePerfData --enable-native-access=ALL-UNNAMED"
 # (astral-sh/uv) with its published .sha256 sidecar — no installer
 # script, so the version on the box is the version recorded here.
 UV_VERSION="0.13.8"
+# ollama: pinned release, installed from the versioned GitHub tarball
+# (ollama/ollama) with its published sha256sum.txt — no installer
+# script, so the version on the box is the version recorded here.
+OLLAMA_VERSION="0.40.16"
+OLLAMA_RELEASE_BASE="https://github.com/ollama/ollama/releases/download"
 
 # AI coding (direct binary downloads — no curl|bash installers)
 OPENCODE_REPO="anomalyco/opencode"
