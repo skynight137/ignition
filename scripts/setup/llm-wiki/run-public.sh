@@ -14,7 +14,16 @@
 [ -r /run/replit/env/latest ] && . /run/replit/env/latest   # workflow shells source no rc
 # env/latest is regenerated and can lag, so pin the roots ourselves: a bare ssh or
 # workflow shell would otherwise resolve REPL_HOME/XDG to $HOME (wiped on recreate).
-REPL_HOME="${REPL_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
+if [ -z "${REPL_HOME:-}" ]; then
+  REPL_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+  # muse-hop: the bundle lives under XDG_DATA_HOME itself
+  # (…/.local/share/llmwiki-app), so the parent-dir derivation would make
+  # REPL_HOME=…/.local/share and XDG_DATA_HOME=…/.local/share/.local/share
+  # (doubled app-state path, seen 2026-11-18). When the derived home already
+  # IS an XDG data dir, the home is one level up. (Env-set REPL_HOME is
+  # untouched — on Replit it is the workspace root and never ends this way.)
+  case "$REPL_HOME" in */.local/share) REPL_HOME="${REPL_HOME%/.local/share}" ;; esac
+fi
 export REPL_HOME
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$REPL_HOME/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$REPL_HOME/.local/share}"
@@ -159,6 +168,11 @@ if [ ! -t 1 ]; then
 fi
 log "supervisor start: app=$APP_PORT public=$PORT local=$LOCAL_PORT project=$PROJECT"
 while true; do
+  # start_display sets DISPLAY_RESTARTED=1 when it (re)starts Xvfb and
+  # nothing ever cleared it, so start_wm ran `pkill -x fluxbox` on EVERY
+  # pass and the WM churned (seen on muse-hop 2026-11-18). Reset per pass:
+  # a fresh display still sets it again inside start_display.
+  DISPLAY_RESTARTED=0
   start_display; start_wm; start_app; assert_project; start_public_server; start_local_server
   sleep "$SLEEP"
 done

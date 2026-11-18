@@ -133,6 +133,7 @@ while [[ $# -gt 0 ]]; do
     -cf|--cloudflared) INSTALL_CLOUDFLARED=true; SELECTED=1; shift ;;
     -ts|--tailscale) INSTALL_TAILSCALE=true; SELECTED=1; shift ;;
     -sx|--sshx) INSTALL_SSHX=true; SELECTED=1; shift ;;
+    -lw|--llm-wiki) INSTALL_LLM_WIKI=true; SELECTED=1; shift ;;
     --all) INSTALL_ALL=true; SELECTED=1; shift ;;
     --doctor) DOCTOR=true; SELECTED=1; shift ;;
     --tor) DO_TOR=1; SELECTED=1; shift ;;
@@ -175,6 +176,9 @@ source "$_SETUP_DIR/ffmpeg.sh"
 source "$_SETUP_DIR/cloudflared.sh"
 source "$_SETUP_DIR/tailscale.sh"
 source "$_SETUP_DIR/sshx.sh"
+source "$_SETUP_DIR/llm-wiki.sh"
+# llm-wiki.sh reads SETUP_LIB_DIR for its bundle (same value as repl's).
+SETUP_LIB_DIR="$_SETUP_DIR"
 # Tor browser lane (dual-profile module — core.sh helpers only, so it loads
 # here too). Sourced unconditionally; --tor calls install_tor.
 if [[ -f "$_SETUP_DIR/tor.sh" ]]; then

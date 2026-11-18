@@ -22,6 +22,12 @@
 # entry makes it survive a recreate). Nothing in this path needs Nix itself — the app is a
 # prebuilt AppImage and the server is Node stdlib.
 #
+# Muse is the mirror image: an Ubuntu box with apt and root, no nix.
+# The display bits (Xvfb, fluxbox, shared-mime-info, libEGL) come from
+# apt instead (_llm_wiki_provision_display_muse). NOTE: apt packages
+# vanish on muse-hop redeploys (/usr is wiped, only ~ persists) — a
+# redeploy needs this step again before the supervisor can start the app.
+#
 # Runtime facts that cost real debugging time (see references/llm-wiki-server.md):
 #   * a window manager is mandatory — without one GTK windows are created but never mapped
 #   * shared-mime-info must be on XDG_DATA_DIRS, or gdk-pixbuf rejects every image format
@@ -85,6 +91,30 @@ _llm_wiki_provision_display() {
   done
 }
 
+_llm_wiki_provision_display_muse() {
+  # Muse branch (Ubuntu, root, apt — no nix): Xvfb + fluxbox +
+  # shared-mime-info + libEGL from apt. NOTE: apt packages vanish on
+  # muse-hop redeploys (/usr is wiped, only ~ persists) — re-running the
+  # lane after a redeploy reinstalls them. apt-get update is slow/stalled
+  # on muse-hop (empty /var/lib/apt/lists, 2026-11-18), so bound it; a
+  # stall must not hang the install — report what is still missing and
+  # carry on (the server half works without X; only the app needs a display).
+  [[ "${REPLIT_MODE:-false}" == true ]] && return 0
+  local missing_pkgs=()
+  command -v Xvfb >/dev/null 2>&1 || missing_pkgs+=(xvfb)
+  command -v fluxbox >/dev/null 2>&1 || missing_pkgs+=(fluxbox)
+  [ -f /usr/share/mime/magic ] || missing_pkgs+=(shared-mime-info)
+  # the app binary's only missing lib on a bare muse box (2026-11-18)
+  ldconfig -p 2>/dev/null | grep -q 'libEGL\.so\.1' || missing_pkgs+=(libegl1)
+  ((${#missing_pkgs[@]})) || return 0
+  command -v apt-get >/dev/null 2>&1 || { warn "llm-wiki: no apt-get; missing display bits: ${missing_pkgs[*]}"; return 1; }
+  step "llm-wiki: installing display bits via apt (${missing_pkgs[*]})"
+  timeout 180 apt-get update -qq 2>/dev/null || true
+  DEBIAN_FRONTEND=noninteractive timeout 600 apt-get install -y "${missing_pkgs[@]}" 2>/dev/null \
+    || warn "llm-wiki: apt install failed — install ${missing_pkgs[*]} by hand and re-run"
+  return 0
+}
+
 nix_bin_out() {
   "$(nix_bin)" --store "$1" build --no-link --print-out-paths \
     nixpkgs#xorg.xvfb nixpkgs#fluxbox nixpkgs#xkeyboard_config 2>/dev/null
@@ -113,7 +143,11 @@ install_llm_wiki() {
   chmod +x "$dest"/*.sh
   echo "  llm-wiki bundle -> $dest$note"
 
-  _llm_wiki_provision_display || true
+  if [[ "${REPLIT_MODE:-false}" == true ]]; then
+    _llm_wiki_provision_display || true
+  else
+    _llm_wiki_provision_display_muse || true
+  fi
   llm_wiki_requirements
   ( cd "$dest" && bash install.sh ) || return 1
 
@@ -238,8 +272,13 @@ llm_wiki_requirements() {
     warn "llm-wiki: missing on this machine —"
     local m
     for m in "${missing[@]}"; do printf '    - %s\n' "$m"; done
-    printf '    nix_run build nixpkgs#xorg.xvfb nixpkgs#fluxbox nixpkgs#x11vnc nixpkgs#novnc\n'
-    printf '    (or the same names in replit.nix, so they survive a recreate)\n'
+    if [[ "${REPLIT_MODE:-false}" == true ]]; then
+      printf '    nix_run build nixpkgs#xorg.xvfb nixpkgs#fluxbox nixpkgs#x11vnc nixpkgs#novnc\n'
+      printf '    (or the same names in replit.nix, so they survive a recreate)\n'
+    else
+      printf '    apt-get install -y xvfb fluxbox shared-mime-info libegl1 x11vnc\n'
+      printf '    (muse-hop: apt packages vanish on redeploy — reinstall after one)\n'
+    fi
   fi
   return 0
 }

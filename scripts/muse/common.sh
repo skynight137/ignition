@@ -193,6 +193,7 @@ INSTALL_FFMPEG="${INSTALL_FFMPEG:-false}"
 INSTALL_CLOUDFLARED="${INSTALL_CLOUDFLARED:-false}"
 INSTALL_TAILSCALE="${INSTALL_TAILSCALE:-false}"
 INSTALL_SSHX="${INSTALL_SSHX:-false}"
+INSTALL_LLM_WIKI="${INSTALL_LLM_WIKI:-false}"
 INSTALL_ALL="${INSTALL_ALL:-false}"
 DOCTOR="${DOCTOR:-false}"
 # Install failures accumulated by run_install_step (multi-tool runs).
@@ -244,6 +245,7 @@ manifest_record_for() {  # $1=install-step label (same table as root.sh)
     ffmpeg)  manifest_record ffmpeg "$XDG_BIN_HOME/ffmpeg" "$XDG_BIN_HOME/ffprobe" "$XDG_BIN_HOME/ffplay" ;;
     cloudflared) manifest_record cloudflared "$XDG_BIN_HOME/cloudflared" ;;
     sshx)    manifest_record sshx "$XDG_BIN_HOME/sshx" ;;
+    llm-wiki) manifest_record llm-wiki "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}" ;;
     *) : ;;
   esac
 }
@@ -309,6 +311,7 @@ any_tool_requested() {
   [[ "${INSTALL_CLOUDFLARED:-false}" == true ]] && return 0
   [[ "${INSTALL_TAILSCALE:-false}" == true ]] && return 0
   [[ "${INSTALL_SSHX:-false}" == true ]] && return 0
+  [[ "${INSTALL_LLM_WIKI:-false}" == true ]] && return 0
   [[ "${DOCTOR:-false}" == true ]] && return 0
   return 1
 }
@@ -357,6 +360,7 @@ muse_main() {
   $INSTALL_CLOUDFLARED && run_install_step cloudflared      install_cloudflared
   $INSTALL_TAILSCALE && run_install_step tailscale         install_tailscale
   $INSTALL_SSHX     && run_install_step sshx               install_sshx
+  $INSTALL_LLM_WIKI && run_install_step llm-wiki           install_llm_wiki
 
   # Fold in wiring registered inside the installers' subshells (spill file).
   load_wiring_spill
