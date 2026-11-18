@@ -33,7 +33,7 @@
 //   search_files. Allowed roots are ~/workspace and ~/skynight137/toolskit, resolved
 //   via realpath at startup (a root that does not exist is dropped with a warning;
 //   on a repl node ~/skynight137/toolskit does not exist, so only ~/workspace
-//   remains — ~/workspace/ignition is inside it anyway). Every call re-validates
+//   remains — ~/workspace/toolskit is inside it anyway). Every call re-validates
 //   (prefix check + realpath re-check) so symlink escapes are refused. No write
 //   tools in this version (P1, after review).
 //

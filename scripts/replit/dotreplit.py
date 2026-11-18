@@ -17,6 +17,7 @@ edits:
   add-workflow FILE SNIPPET.toml                 append one workflow block
   add-task FILE WORKFLOW TASK ARGS               append one task to a workflow
   del-task FILE WORKFLOW TASK [ARGS]             remove one task from a workflow
+  set-task-args FILE WORKFLOW TASK NEWARGS       replace one task's args in place
   del-workflow FILE WORKFLOW                     remove one whole workflow block
 
 Every mutating op: parses first, edits only the target section's span,
@@ -527,6 +528,65 @@ def op_del_task(path, workflow, task, args=None):
         intended_removed_prefixes=(f"workflows.workflow[{wi}].tasks[{last}]",))
 
 
+def op_set_task_args(path, workflow, task, args):
+    """Replace the args of one task in a named workflow, in place.
+
+    Matches by workflow name + task name; refuses when 0 or >1 tasks
+    match (ambiguous). Only the args line is rewritten, so waitForPort
+    and every other key in the task block survive — unlike del-task +
+    add-task, which would drop waitForPort. Idempotent: the same args
+    already present is a no-op. Used for the ignition → toolskit rename
+    (task args carry the checkout dir path)."""
+    doc = load(path)
+    target = None
+    for w in doc.get("workflows", {}).get("workflow", []):
+        if w.get("name") == workflow:
+            target = w
+            break
+    if target is None:
+        print(f"workflow {workflow!r} not found", file=sys.stderr)
+        return 5
+    matches = [t for t in target.get("tasks", []) if t.get("task") == task]
+    if not matches:
+        print(f"task {task!r} not in workflow {workflow!r} (no-op)")
+        return 0
+    if len(matches) > 1:
+        print(f"workflow {workflow!r} has {len(matches)} tasks {task!r} "
+              "— ambiguous, refusing", file=sys.stderr)
+        return 5
+    if matches[0].get("args") == args:
+        print(f"task {task!r} args already set in workflow {workflow!r}")
+        return 0
+
+    def mutate(lines):
+        name_re = re.compile(rf'^\s*name\s*=\s*"{re.escape(workflow)}"')
+        task_re = re.compile(rf'^\s*task\s*=\s*"{re.escape(task)}"',
+                             re.MULTILINE)
+        all_spans = list(spans(lines))
+        blocks = [(s, e) for h, s, e in all_spans
+                  if h and h.startswith("[[workflows.workflow]]")]
+        for n, (s, e) in enumerate(blocks):
+            extent_end = blocks[n + 1][0] if n + 1 < len(blocks) else len(lines)
+            sub = next((i for i in range(s + 1, extent_end)
+                        if HEADER_RE.match(lines[i])), extent_end)
+            if not any(name_re.match(lines[i]) for i in range(s + 1, sub)):
+                continue
+            task_spans = [(s2, e2) for h2, s2, e2 in all_spans
+                          if h2 == "[[workflows.workflow.tasks]]"
+                          and s2 > s and s2 < extent_end]
+            for (s2, e2) in task_spans:
+                body = "".join(lines[s2:e2])
+                if task_re.search(body):
+                    for i in range(s2, e2):
+                        if re.match(r"^\s*args\s*=", lines[i]):
+                            lines[i] = f"args = {toml_str(args)}\n"
+                            return lines
+                    return None  # task found, no args line: refuse to invent one
+            return None
+        return None
+    return guarded_edit(path, mutate)
+
+
 def op_del_workflow(path, workflow):
     """Remove one whole [[workflows.workflow]] block by name, including
     its tasks and metadata subsections.
@@ -597,6 +657,8 @@ def main(argv):
     if cmd == "del-task":
         return op_del_task(path, argv[3], argv[4],
                            argv[5] if len(argv) > 5 else None)
+    if cmd == "set-task-args":
+        return op_set_task_args(path, argv[3], argv[4], argv[5])
     if cmd == "del-workflow":
         return op_del_workflow(path, argv[3])
     if cmd == "del-port":

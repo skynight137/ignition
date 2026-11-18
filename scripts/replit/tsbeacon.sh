@@ -43,7 +43,7 @@ UP=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
 if pgrep -f '[t]our.py' >/dev/null 2>&1; then TOUR=true; else TOUR=false; fi
 if curl -s --max-time 4 http://127.0.0.1:9377/health 2>/dev/null | grep -q '"ok":true'; then CFOK=true; else CFOK=false; fi
 DISK=$(df --output=pcent "$WS" 2>/dev/null | tail -1 | tr -dc '0-9')
-IGNITION=$(git -C "$WS/ignition" rev-parse --short HEAD 2>/dev/null || echo unknown)
+IGNITION=$(git -C "$WS/toolskit" rev-parse --short HEAD 2>/dev/null || echo unknown)
 # Workflow logs end lines with CR (Replit shell logs are CRLF); a raw CR
 # (or tab, or any control byte) inside the JSON string is invalid JSON
 # and the CC answers 400. Strip ALL C0 controls (000-037: NUL, tab, LF,

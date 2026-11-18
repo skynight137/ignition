@@ -1,4 +1,4 @@
-# CI for skynight137/ignition — modeled on the user-provided matrix example:
+# CI for skynight137/toolskit — modeled on the user-provided matrix example:
 # OS matrix, fail-fast: false, concurrency cancel-in-progress, artifacts
 # uploaded even on failure. Node is pinned to 26 (the fleet's major).
 #
