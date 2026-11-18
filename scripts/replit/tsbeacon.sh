@@ -17,7 +17,7 @@
 #        box's .replit userenv, else hostname)
 # Env:   STORE_HOST (default muse-hop IP at authoring), STORE_PORT (8099),
 #        TS_BIN, TS_SOCK (fleet join defaults), BEACON_BUFFER,
-#        CF_BEACON_URL (default the live fleet-beacon Worker; empty = skip CF).
+#        CF_BEACON_URL (default the live cf-hh Worker; empty = skip CF).
 # Dual-write: the same body is POSTed to BOTH the muse-hop payload-store
 # (primary: drives the fleet health watch, owns the backlog + exit code)
 # AND the Cloudflare Worker (secondary liveness sink, best-effort). A CF
@@ -35,7 +35,7 @@ PORT="${STORE_PORT:-8099}"
 TS_BIN="${TS_BIN:-$WS/.local/bin/tailscale}"
 TS_SOCK="${TS_SOCK:-$WS/.local/state/tailscale/tailscaled.sock}"
 BUFFER="${BEACON_BUFFER:-$WS/.config/beacon/buffer.jsonl}"
-CF_BEACON_URL="${CF_BEACON_URL:-https://fleet-beacon.zode.workers.dev/beacon}"
+CF_BEACON_URL="${CF_BEACON_URL:-https://cf-hh.zode.workers.dev/beacon}"
 
 TS=$(date '+%Y-%m-%dT%H:%M:%S%z')
 UP=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
