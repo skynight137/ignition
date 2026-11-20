@@ -41,7 +41,7 @@
 CAMOFOX_NPM_PKG="@askjo/camofox-browser"
 camofox_pkg_dir() { printf '%s/lib/node_modules/@askjo/camofox-browser' "$NODE_DIR"; }
 
-CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
+CAMOUFOX_INSTALL_DIR="${CAMOUFOX_INSTALL_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/camoufox}"
 
 # Server STATE dir (cookies/profiles/uploads/traces + the closure + env snippet) ──
 # The npm package defaults every state var under $HOME/.camofox
@@ -460,7 +460,7 @@ EOF
 #   the legacy attr that ships a working Xvfb is `nixpkgs.xorg.xorgserver`.
 # * `nix --store /nix/store build nixpkgs#xorg.xvfb` is NOT a substitute:
 #   its output lands in the chroot store (/nix/store/nix/store/<hash>) and
-#   is invisible to the shell that checks for it (references/nix.md §3b).
+#   is invisible to the shell that checks for it (references/nix.md Section 3b).
 # So: declare in replit.nix for the next rebuild AND nix-env for now. The
 # user never hand-edits a package list.
 CAMOFOX_NIX_DEPS_EXPR=(cacert gtk3 alsa-lib xorg.libXdamage xorg.xvfb)

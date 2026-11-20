@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 # Environment, paths, mode detection and shared registries. Sourced by setup.sh.
-JAVA_HOME="$XDG_DATA_HOME/java"
-SDK="$XDG_DATA_HOME/android-sdk"
-NODE_DIR="$XDG_DATA_HOME/node"
+JAVA_HOME="${JAVA_HOME:-$XDG_DATA_HOME/java}"
+SDK="${SDK:-$XDG_DATA_HOME/android-sdk}"
+NODE_DIR="${NODE_DIR:-$XDG_DATA_HOME/node}"
 # npm's ONLY global prefix (where `-g` installs actually land — Replit pins
 # this via the inherited env). Captured BEFORE the node-toolchain override
 # below so clean_* can uninstall globally-installed packages from the real
 # location, not the (possibly empty) $NODE_DIR.
-NPM_GLOBAL_PREFIX="${npm_config_prefix:-}"
+NPM_GLOBAL_PREFIX="${NPM_GLOBAL_PREFIX:-${npm_config_prefix:-}}"
 npm_config_prefix="$NODE_DIR"
 # Replit's package firewall rewrites registries to an internal HTTP mirror
 # (http://package-firewall.replit.internal/...). npm >= 12 refuses non-https
@@ -61,40 +61,40 @@ if [[ -r /etc/ssl/certs/ca-certificates.crt ]]; then
   _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE GIT_SSL_CAINFO AWS_CA_BUNDLE)
 fi
 
-ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"
+ORI_CONFIG_DIR="${ORI_CONFIG_DIR:-$XDG_CONFIG_HOME/ori}"
 
 # Replit platform sets XDG_CONFIG_HOME=$REPL_HOME/.config, so this
 # resolves to REPL_HOME/.config/claude — persistent, survives $HOME wipes.
-CLAUDE_CONFIG_DIR="$XDG_CONFIG_HOME/claude"
+CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$XDG_CONFIG_HOME/claude}"
 
-OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
 
-HERMES_HOME="${REPL_HOME:-$HOME}/.hermes"
+HERMES_HOME="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}"
 # Hermes' two env vars and the dir that holds the real launcher. All three are
 # ordinary wire-registered tool vars/PATH dirs now (the pre-merge layout kept
 # them in a separate rc block outside the managed one, which every rewrite then
 # had to re-append to keep PATH precedence stable). The launcher dir is the
 # ONLY provider of `hermes` / `hermes-acp` on this box: $XDG_BIN_HOME holds just
 # the chrome shim, no forwarder, so PATH order cannot pick a different binary.
-HERMES_LAUNCHER_DIR="$HERMES_HOME/hermes-agent/.hermes/bin"
+HERMES_LAUNCHER_DIR="${HERMES_LAUNCHER_DIR:-$HERMES_HOME/hermes-agent/.hermes/bin}"
 # Managed-scope dir: Hermes defaults to /etc/hermes, which on Replit is a
 # read-only mount that cannot be created without root, so it is pinned under
 # HERMES_HOME. Exported with HERMES_HOME so interactive, gateway and workflow
 # shells all resolve the same scope.
-HERMES_MANAGED_DIR="$HERMES_HOME/managed"
+HERMES_MANAGED_DIR="${HERMES_MANAGED_DIR:-$HERMES_HOME/managed}"
 
 # zsh interactive shell (oh-my-zsh + powerlevel10k). Binaries come from a
 # durable nix profile, the framework and dotfiles from $XDG_DATA_HOME and
 # $XDG_CONFIG_HOME/zsh. ZDOTDIR is what lets a bare `zsh` find them: there
 # is no $HOME/.zshrc, and $HOME is wiped on recreate.
-NIX_PROFILE_DIR="${REPL_HOME:-$HOME}/.local/nix-profiles"
-ZSH_PROFILE="$NIX_PROFILE_DIR/zsh"
-ZSH_DIR="$XDG_DATA_HOME/oh-my-zsh"
-ZSH_DOTDIR="$XDG_CONFIG_HOME/zsh"
+NIX_PROFILE_DIR="${NIX_PROFILE_DIR:-${REPL_HOME:-$HOME}/.local/nix-profiles}"
+ZSH_PROFILE="${ZSH_PROFILE:-$NIX_PROFILE_DIR/zsh}"
+ZSH_DIR="${ZSH_DIR:-$XDG_DATA_HOME/oh-my-zsh}"
+ZSH_DOTDIR="${ZSH_DOTDIR:-$XDG_CONFIG_HOME/zsh}"
 export ZDOTDIR="$ZSH_DOTDIR"
 
-OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
-OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
+OLLAMA_INSTALL_DIR="${OLLAMA_INSTALL_DIR:-$XDG_DATA_HOME/ollama}"
+OLLAMA_MODELS="${OLLAMA_MODELS:-$OLLAMA_INSTALL_DIR/models}"
 
 # tailscale user data (node key + login) — preserved by `--clean tailscale`.
 # The binaries themselves live in $XDG_BIN_HOME, like the other direct-download
@@ -148,7 +148,7 @@ fi
 
 # Tool dirs exported ONCE for child processes — the rest of the script
 # uses the values directly (no re-exporting inline in install functions).
-ANDROID_HOME="$SDK"
+ANDROID_HOME="${ANDROID_HOME:-$SDK}"
 export JAVA_HOME ANDROID_HOME NODE_DIR \
        OPENCODE_CONFIG_DIR \
        CLAUDE_CONFIG_DIR ORI_CONFIG_DIR \
@@ -270,37 +270,37 @@ seed_tool_wiring(){
 }
 
 # State flags ───────────────────────────────────────────────────────────────
-INSTALL_ANDROID=false
-INSTALL_JAVA=false
-INSTALL_NODE=false
-INSTALL_OPENCODE=false
-INSTALL_OLLAMA=false
-INSTALL_CLAUDE=false
-INSTALL_HERMES=false
-INSTALL_ORI=false
-INSTALL_UV=false
-INSTALL_RCLONE=false
-INSTALL_QBT=false
+INSTALL_ANDROID="${INSTALL_ANDROID:-false}"
+INSTALL_JAVA="${INSTALL_JAVA:-false}"
+INSTALL_NODE="${INSTALL_NODE:-false}"
+INSTALL_OPENCODE="${INSTALL_OPENCODE:-false}"
+INSTALL_OLLAMA="${INSTALL_OLLAMA:-false}"
+INSTALL_CLAUDE="${INSTALL_CLAUDE:-false}"
+INSTALL_HERMES="${INSTALL_HERMES:-false}"
+INSTALL_ORI="${INSTALL_ORI:-false}"
+INSTALL_UV="${INSTALL_UV:-false}"
+INSTALL_RCLONE="${INSTALL_RCLONE:-false}"
+INSTALL_QBT="${INSTALL_QBT:-false}"
 INSTALL_ARIA2=false
-INSTALL_FFMPEG=false
-INSTALL_CLOUDFLARED=false
-INSTALL_TAILSCALE=false
-INSTALL_SSHX=false
-INSTALL_JOIN=false
+INSTALL_FFMPEG="${INSTALL_FFMPEG:-false}"
+INSTALL_CLOUDFLARED="${INSTALL_CLOUDFLARED:-false}"
+INSTALL_TAILSCALE="${INSTALL_TAILSCALE:-false}"
+INSTALL_SSHX="${INSTALL_SSHX:-false}"
+INSTALL_JOIN="${INSTALL_JOIN:-false}"
 WF=false # --workflow: workflow mode (stream logs to the terminal, keep the job alive)
-INSTALL_CAMOFOX=false
-INSTALL_LIGHTPANDA=false
-INSTALL_MOLI=false
-INSTALL_TOR=false
-INSTALL_HERMES_CHROMIUM=false
-INSTALL_LLM_WIKI=false
-INSTALL_ZSH=false
-INSTALL_ALL=false
-DOCTOR=false
-FIX=false
-CLEAN=false
-LIST_STATE=false
-YES=false
+INSTALL_CAMOFOX="${INSTALL_CAMOFOX:-false}"
+INSTALL_LIGHTPANDA="${INSTALL_LIGHTPANDA:-false}"
+INSTALL_MOLI="${INSTALL_MOLI:-false}"
+INSTALL_TOR="${INSTALL_TOR:-false}"
+INSTALL_HERMES_CHROMIUM="${INSTALL_HERMES_CHROMIUM:-false}"
+INSTALL_LLM_WIKI="${INSTALL_LLM_WIKI:-false}"
+INSTALL_ZSH="${INSTALL_ZSH:-false}"
+INSTALL_ALL="${INSTALL_ALL:-false}"
+DOCTOR="${DOCTOR:-false}"
+FIX="${FIX:-false}"
+CLEAN="${CLEAN:-false}"
+LIST_STATE="${LIST_STATE:-false}"
+YES="${YES:-false}"
 # Install failures accumulated by run_install_step (`--all` / multi-tool runs).
 # One broken tool must not abort the rest of the run — see run_install_step.
 _INSTALL_FAILURES=()

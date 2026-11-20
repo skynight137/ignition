@@ -28,7 +28,7 @@
 
 LIGHTPANDA_HOME="${LIGHTPANDA_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/lightpanda}"
 LIGHTPANDA_BIN="$LIGHTPANDA_HOME/lightpanda"
-LIGHTPANDA_VENV="$LIGHTPANDA_HOME/venv"
+LIGHTPANDA_VENV="${LIGHTPANDA_VENV:-$LIGHTPANDA_HOME/venv}"
 
 lightpanda_asset_name() {
   case "$(uname -m)" in

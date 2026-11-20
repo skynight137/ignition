@@ -11,12 +11,12 @@
 # can set them first.
 
 # Tool dirs ─────────────────────────────────────────────────────────────────
-NODE_DIR="$XDG_DATA_HOME/node"
+NODE_DIR="${NODE_DIR:-$XDG_DATA_HOME/node}"
 # npm's ONLY global prefix (where `-g` installs actually land). Captured
 # BEFORE the node-toolchain override below so clean_* can uninstall
 # globally-installed packages from the real location, not the (possibly
 # empty) $NODE_DIR.
-NPM_GLOBAL_PREFIX="${npm_config_prefix:-}"
+NPM_GLOBAL_PREFIX="${NPM_GLOBAL_PREFIX:-${npm_config_prefix:-}}"
 npm_config_prefix="$NODE_DIR"
 
 # TLS / CA bundle — the system location, /etc/ssl/certs, always.
@@ -38,21 +38,21 @@ if [[ -r /etc/ssl/certs/ca-certificates.crt ]]; then
   _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE GIT_SSL_CAINFO AWS_CA_BUNDLE)
 fi
 
-ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"
-CLAUDE_CONFIG_DIR="$XDG_CONFIG_HOME/claude"
-OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
+ORI_CONFIG_DIR="${ORI_CONFIG_DIR:-$XDG_CONFIG_HOME/ori}"
+CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$XDG_CONFIG_HOME/claude}"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
 
-HERMES_HOME="$HOME/.hermes"
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 # Hermes' two env vars and the dir that holds the real launcher. All three are
 # ordinary wire-registered tool vars/PATH dirs now. The launcher dir is the
 # ONLY provider of `hermes` / `hermes-acp` on this box.
-HERMES_LAUNCHER_DIR="$HERMES_HOME/hermes-agent/.hermes/bin"
+HERMES_LAUNCHER_DIR="${HERMES_LAUNCHER_DIR:-$HERMES_HOME/hermes-agent/.hermes/bin}"
 # Managed-scope dir: Hermes defaults to /etc/hermes, which cannot be created
 # without root, so it is pinned under HERMES_HOME.
-HERMES_MANAGED_DIR="$HERMES_HOME/managed"
+HERMES_MANAGED_DIR="${HERMES_MANAGED_DIR:-$HERMES_HOME/managed}"
 
-OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
-OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
+OLLAMA_INSTALL_DIR="${OLLAMA_INSTALL_DIR:-$XDG_DATA_HOME/ollama}"
+OLLAMA_MODELS="${OLLAMA_MODELS:-$OLLAMA_INSTALL_DIR/models}"
 
 # tailscale user data (node key + login) — preserved by `--clean tailscale`.
 # The binaries themselves live in $XDG_BIN_HOME, like the other direct-download
@@ -181,6 +181,7 @@ seed_tool_wiring(){
 # BEFORE this file is sourced and sets the flags it was given; a plain
 # `INSTALL_NODE=false` here would reset them.
 INSTALL_NODE="${INSTALL_NODE:-false}"
+INSTALL_UV="${INSTALL_UV:-false}"
 INSTALL_OPENCODE="${INSTALL_OPENCODE:-false}"
 INSTALL_OLLAMA="${INSTALL_OLLAMA:-false}"
 INSTALL_CLAUDE="${INSTALL_CLAUDE:-false}"
@@ -220,8 +221,8 @@ trap '_run_exit_actions' EXIT
 # run_install_step after a successful install. tailscale is deliberately
 # absent: its state is a live daemon + node identity, owned by
 # clean_tailscale's own explicit logic, not by a path list.
-MUSE_MANIFEST_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/muse-setup"
-MUSE_MANIFEST="$MUSE_MANIFEST_DIR/manifest.tsv"
+MUSE_MANIFEST_DIR="${MUSE_MANIFEST_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/muse-setup}"
+MUSE_MANIFEST="${MUSE_MANIFEST:-$MUSE_MANIFEST_DIR/manifest.tsv}"
 manifest_record() {  # $1=label, rest=paths
   local label="$1"; shift
   mkdir -p "$MUSE_MANIFEST_DIR" 2>/dev/null || return 0
@@ -347,6 +348,7 @@ muse_main() {
   # Each tool runs in its own errored-but-isolated step (run_install_step):
   # one broken installer no longer aborts the rest of the run. A failure is
   # reported, collected and re-surfaced in the summary.
+  $INSTALL_UV       && run_install_step uv                 install_uv
   $INSTALL_NODE     && run_install_step node               install_node
   $INSTALL_OPENCODE && run_install_step opencode           install_opencode
   $INSTALL_OLLAMA   && run_install_step ollama             install_ollama

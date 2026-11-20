@@ -20,7 +20,7 @@
 # Consumers that cannot source a snippet (workflows, Run button, cron) get a
 # launcher shim on PATH, exactly like launch-camofox-browser.
 
-HERMES_CHROME_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/hermes-chromium"
+HERMES_CHROME_STATE="${HERMES_CHROME_STATE:-${XDG_CONFIG_HOME:-$HOME/.config}/hermes-chromium}"
 HERMES_CHROME_CLOSURE="$HERMES_CHROME_STATE/closure.txt"
 HERMES_CHROME_ENVSNIP="$HERMES_CHROME_STATE/env.sh"
 

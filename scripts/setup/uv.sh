@@ -75,7 +75,18 @@ install_uv() {
   _uv_install_pinned || die "uv install failed (pinned $UV_VERSION)"
   [[ -x "$XDG_BIN_HOME/uv" ]] || die "uv install did not produce $XDG_BIN_HOME/uv"
   ok "uv installed: $XDG_BIN_HOME/uv ($("$XDG_BIN_HOME/uv" --version 2>&1 | head -1))"
-  record_tool_env_vars UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH
+  # muse-hop egress stalls on parallel uv downloads (uv default ~50
+  # concurrent CONNECTs time out; proven 2026-11-19: serial uv sync
+  # installed 66 pkgs in 122s where parallel died repeatedly ~45s).
+  # On muse, record the serial knobs into env.sh so every later
+  # `source env.sh && uv ...` gets the same treatment — no more
+  # slow-download drama, for any uv use, not just Hermes.
+  local uv_vars=(UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH)
+  if [[ "$REPLIT_MODE" != true ]]; then
+    export UV_CONCURRENT_DOWNLOADS=1 UV_HTTP_TIMEOUT=120
+    uv_vars+=(UV_CONCURRENT_DOWNLOADS UV_HTTP_TIMEOUT)
+  fi
+  record_tool_env_vars "${uv_vars[@]}"
   record_tool_path_dirs "$XDG_BIN_HOME"
-  wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
+  wire_tool uv "${uv_vars[@]}" -- "$XDG_BIN_HOME"
 }

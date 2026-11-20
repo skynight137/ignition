@@ -124,7 +124,7 @@ while [[ $# -gt 0 ]]; do
     -oc|--opencode) INSTALL_OPENCODE=true; SELECTED=1; shift ;;
     -ol|--ollama) INSTALL_OLLAMA=true; SELECTED=1; shift ;;
     -cl|--claude) INSTALL_CLAUDE=true; SELECTED=1; shift ;;
-    -ha|--hermes) INSTALL_HERMES=true; SELECTED=1; shift ;;
+    -ha|--hermes) INSTALL_HERMES=true; INSTALL_UV=true; SELECTED=1; shift ;;
     -ori|--openrouterai) INSTALL_ORI=true; SELECTED=1; shift ;;
     -r|--rclone) INSTALL_RCLONE=true; SELECTED=1; shift ;;
     -q|--qbt) INSTALL_QBT=true; SELECTED=1; shift ;;
@@ -163,6 +163,7 @@ source "$_SETUP_DIR/../muse/common.sh"  # muse-only env/paths/wiring (not loaded
 source "$_SETUP_DIR/bin.sh"
 source "$_SETUP_DIR/rc.sh"  # writers only under muse (replit writers early-return)
 source "$_SETUP_DIR/doctor.sh"
+source "$_SETUP_DIR/uv.sh"
 source "$_SETUP_DIR/node.sh"
 source "$_SETUP_DIR/opencode.sh"
 source "$_SETUP_DIR/ollama.sh"

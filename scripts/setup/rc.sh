@@ -160,7 +160,7 @@ parse_args() {
       -oc|--opencode)            INSTALL_OPENCODE=true ;;
       -ol|--ollama)              INSTALL_OLLAMA=true ;;
       -cl|--claude)              INSTALL_CLAUDE=true ;;
-      -ha|--hermes)              INSTALL_HERMES=true ;;
+      -ha|--hermes)              INSTALL_HERMES=true; INSTALL_UV=true ;;
       -ori|--openrouterai)       INSTALL_ORI=true ;;
       -r|--rclone)               INSTALL_RCLONE=true ;;
       -q|--qbt)                  INSTALL_QBT=true ;;
