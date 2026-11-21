@@ -78,9 +78,9 @@ install_uv() {
   # muse-hop egress stalls on parallel uv downloads (uv default ~50
   # concurrent CONNECTs time out; proven 2026-11-19: serial uv sync
   # installed 66 pkgs in 122s where parallel died repeatedly ~45s).
-  # On muse, record the serial knobs into env.sh so every later
-  # `source env.sh && uv ...` gets the same treatment — no more
-  # slow-download drama, for any uv use, not just Hermes.
+  # On muse, record the serial knobs into ~/.bashrc (the managed
+  # toolchain block) so every later shell gets the same treatment —
+  # no more slow-download drama, for any uv use, not just Hermes.
   local uv_vars=(UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH)
   if [[ "$REPLIT_MODE" != true ]]; then
     export UV_CONCURRENT_DOWNLOADS=1 UV_HTTP_TIMEOUT=120

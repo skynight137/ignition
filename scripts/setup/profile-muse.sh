@@ -22,9 +22,10 @@
 #                               already lives at
 #                               <ws>/.local/share/tailscale keeps that
 #                               path — see the TSDIR resolution below)
-#   ~/.config/stack/env.sh      shared env (XDG + MUSE_HOME + PATH;
-#                               written only when missing — a live copy
-#                               is fleet-managed)
+#   ~/.bashrc                   shared env (XDG + MUSE_HOME + PATH;
+#                               written into the managed block — the old
+#                               ~/.config/stack/env.sh layer is deprecated
+#                               and migrated away, see below)
 #   /root/.ssh                  symlink -> $SSHDIR (root's passwd home is
 #                               /root, so tooling that resolves ~ via
 #                               passwd needs the pointer). Legacy boxes
@@ -94,7 +95,13 @@ WORKSPACE="$HOME/workspace"
 WS="$WORKSPACE"
 # Shell target for the toolchain block (rc writer). MUSE_ENV_FILE lets the
 # test harness point wiring at a scratch env file.
-BASHRC="${MUSE_ENV_FILE:-$HOME/.config/stack/env.sh}"
+# On muse the rc IS ~/.bashrc — writable here, unlike Replit, where
+# ~/.bashrc is not directly editable and ~/.config/bashrc is the target
+# instead (that box's ~/.bashrc loads it when present). The old
+# ~/.config/stack/env.sh layer is deprecated (2026-11-21): setup no
+# longer writes it, and the migration below moves a live copy's lines
+# into ~/.bashrc once, then moves the file aside.
+BASHRC="${MUSE_ENV_FILE:-$HOME/.bashrc}"
 # Snapshot the environment (name → value) BEFORE the script assigns or
 # exports anything — input to the rc writer's no-shadowing rule. Values
 # matter, not names: our own previous managed block comes back through the
@@ -377,6 +384,15 @@ reassert_termix_user_units() {
   # (3) lingering starts user@0 immediately and at every boot after;
   # the enabled user units then start on their own.
   loginctl enable-linger root 2>/dev/null || true
+  # (3b) assert the enable took: a silent failure here leaves user@0 down
+  # after the next boot with no signal (the 2026-11-20 linger outage:
+  # runtime fixed by hand, repo never asserted it). Non-fatal to the
+  # join — the caller swallows the status — but the message is the
+  # signal, and the stack-watch heal notices it.
+  if ! loginctl show-user root --property=Linger 2>/dev/null | grep -q '^Linger=yes$'; then
+    echo "[termix] ASSERT FAILED: linger NOT enabled for root after enable-linger (user@0 will not auto-start)" >&2
+    return 1
+  fi
   return 0
 }
 
@@ -757,25 +773,29 @@ fi
 # (ephemeral), so tooling that resolves ~ via passwd needs the link.
 if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
 
-say "shared env (~/.config/stack/env.sh) + .env template"
-# The shared env lives at ~/.config/stack/env.sh (the fleet stack layer;
-# ~/.bashrc already hooks it). Write the template ONLY when the file is
-# missing — a live copy is fleet-managed (secrets loader + PATH cases)
-# and must never be clobbered by a re-run.
-if [[ ! -f "$HOME/.config/stack/env.sh" ]]; then
-  mkdir -p "$HOME/.config/stack"
-  cat > "$HOME/.config/stack/env.sh" <<EOF
+say "shared env (~/.bashrc) + .env template"
+# The shared env lives DIRECTLY in ~/.bashrc on muse (see BASHRC above).
+# XDG lines are guarded (${VAR:-default}) so a value the operator or the
+# platform already set wins; the fallbacks mirror the platform's own
+# guest.env (runtime-cell): HOME-based, all on the persistent home
+# volume. (The tailscale daemon's state dir is runtime state: it follows
+# XDG_STATE_HOME, resolved by setup.sh — see RS_TS_STATE_DIR in the
+# stack .env.) The block is append-if-absent on fresh installs and
+# replaced whole on re-runs — a live copy is fleet-managed (secrets
+# loader + PATH cases) and must never be clobbered line-by-line.
+_muse_shared_block() {
+  cat <<EOF
+
+# >>> muse shared env >>>
 # Shared environment for this VM — non-secret config only.
-# XDG values mirror the platform's own guest.env (runtime-cell):
-# HOME-based, all on the persistent home volume. (The tailscale
-# daemon's state dir is runtime state: it follows XDG_STATE_HOME,
-# resolved by setup.sh — see RS_TS_STATE_DIR in the stack .env.)
-export XDG_DATA_HOME="\$HOME/.local/share"
-export XDG_CONFIG_HOME="\$HOME/.config"
-export XDG_CACHE_HOME="\$HOME/.cache"
-export XDG_STATE_HOME="\$HOME/.local/state"
-# Toolchain anchor: the persistent target path for fleet tooling.
-export MUSE_HOME="\$HOME/workspace"
+export XDG_DATA_HOME="\${XDG_DATA_HOME:-\$HOME/.local/share}"
+export XDG_CONFIG_HOME="\${XDG_CONFIG_HOME:-\$HOME/.config}"
+export XDG_CACHE_HOME="\${XDG_CACHE_HOME:-\$HOME/.cache}"
+export XDG_STATE_HOME="\${XDG_STATE_HOME:-\$HOME/.local/state}"
+export XDG_BIN_HOME="\${XDG_BIN_HOME:-\$HOME/.local/bin}"
+# Toolchain anchor: $HOME itself — ~ persists across redeploys on a Muse
+# VM (proven), so the repl pattern (REPL_HOME=<workspace>) does not apply.
+export MUSE_HOME="\$HOME"
 case ":\$PATH:" in
   *":$BINDIR:"*) ;;
   *) export PATH="$BINDIR:\$HOME/.local/bin:$SSHDIR/bin:\$PATH" ;;
@@ -783,16 +803,39 @@ esac
 if [ -r "$SSHDIR/.env" ]; then
   set -a; . "$SSHDIR/.env"; set +a
 fi
-EOF
-  chmod 644 "$HOME/.config/stack/env.sh"
-fi
-if ! grep -q "muse shared env" "$HOME/.bashrc" 2>/dev/null; then
-  cat >> "$HOME/.bashrc" <<'EOF'
-
-# >>> muse shared env >>>
-[ -f "$HOME/.config/stack/env.sh" ] && . "$HOME/.config/stack/env.sh"
 # <<< muse shared env <<<
 EOF
+}
+if ! grep -q "muse shared env" "$HOME/.bashrc" 2>/dev/null; then
+  _muse_shared_block >> "$HOME/.bashrc"
+fi
+# Migration from the deprecated ~/.config/stack/env.sh layer (pre
+# 2026-11-21): a live copy means this box predates the direct-~/.bashrc
+# layout. Replace the source-hook block (if that is what is in ~/.bashrc)
+# with the direct block, carry the uv-egress block over verbatim — it is
+# live, proven config with no other writer — then move env.sh aside. The
+# toolchain managed block is NOT carried over: the rc writer regenerates
+# it into ~/.bashrc on the next tool install.
+if [[ -f "$HOME/.config/stack/env.sh" ]]; then
+  _uv_block="$(mktemp)"
+  awk '/^# >>> uv egress/{ f=1 } f { print } /^# <<< uv egress/{ f=0 }' \
+    "$HOME/.config/stack/env.sh" > "$_uv_block" || true
+  _rc_trim="$(mktemp)"
+  awk '
+    $0 ~ /^# >>> muse shared env >>>/ { inskip=1 }
+    inskip { if ($0 ~ /^# <<< muse shared env <<</) { inskip=0 }; next }
+    { print }
+  ' "$HOME/.bashrc" > "$_rc_trim"
+  cat "$_rc_trim" > "$HOME/.bashrc"
+  rm -f "$_rc_trim"
+  _muse_shared_block >> "$HOME/.bashrc"
+  if [[ -s "$_uv_block" ]] && ! grep -q "uv egress" "$HOME/.bashrc" 2>/dev/null; then
+    printf '\n' >> "$HOME/.bashrc"
+    cat "$_uv_block" >> "$HOME/.bashrc"
+  fi
+  rm -f "$_uv_block"
+  mv "$HOME/.config/stack/env.sh" "$HOME/.config/stack/env.sh.bak-$(date +%Y%m%d)"
+  say "migrated ~/.config/stack/env.sh -> ~/.bashrc (file moved aside)"
 fi
 if [[ ! -f "$SSHDIR/.env" ]]; then
   cat > "$SSHDIR/.env" <<EOF
@@ -834,13 +877,13 @@ if [[ "$SSH_USER" != root ]]; then mkdir -p "$SVC_HOME/.ssh"; fi
 # XDG below mirrors the platform's guest.env values (HOME-based) so an
 # ssh session sees the same environment the platform's own processes get.
 cat > "$SVC_ENV_FILE" <<EOF
-MUSE_HOME=$WS
+MUSE_HOME=$HOME
 XDG_DATA_HOME=$HOME/.local/share
 XDG_CONFIG_HOME=$HOME/.config
 XDG_CACHE_HOME=$HOME/.cache
 XDG_STATE_HOME=$HOME/.local/state
 PATH=$BINDIR:$SSHDIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-BASH_ENV=$HOME/.config/stack/env.sh
+BASH_ENV=$HOME/.bashrc
 EOF
 if [[ "$SSH_USER" != root ]]; then
   chown -R "$SSH_USER:$SSH_USER" "$SVC_HOME/.ssh" 2>/dev/null || true
